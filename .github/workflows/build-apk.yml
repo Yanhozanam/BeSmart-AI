@@ -94,7 +94,7 @@ jobs:
             echo '    externalNativeBuild {'
             echo '        cmake {'
             echo '            path "src/main/cpp/CMakeLists.txt"'
-            echo '            version "3.18.1"'
+            echo '            version "3.22.1"'
             echo '        }'
             echo '    }'
             echo ''
