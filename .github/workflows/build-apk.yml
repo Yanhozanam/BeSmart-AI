@@ -52,64 +52,63 @@ jobs:
         run: |
           LLAMAFU_BUILD="$HOME/.pub-cache/hosted/pub.dev/llamafu-0.1.0/android/build.gradle"
           if [ ! -f "$LLAMAFU_BUILD" ]; then
-            echo "Looking for llamafu build.gradle..."
             LLAMAFU_BUILD=$(find "$HOME/.pub-cache" -name "build.gradle" -path "*/llamafu*/android/*" 2>/dev/null | head -1)
           fi
           echo "Patching: $LLAMAFU_BUILD"
-          cat > "$LLAMAFU_BUILD" << 'GRADLE'
-plugins {
-    id "com.android.library"
-    id "kotlin-android"
-}
-
-android {
-    namespace "com.example.llamafu"
-    compileSdk 34
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = '17'
-    }
-
-    sourceSets {
-        main.java.srcDirs += 'src/main/kotlin'
-    }
-
-    defaultConfig {
-        minSdk 21
-        targetSdk 34
-
-        externalNativeBuild {
-            cmake {
-                def llamaCppDir = System.getenv("LLAMA_CPP_DIR") ?: project.findProperty("llama.cpp.dir") ?: "${projectDir}/../../../llama.cpp"
-                arguments "-DLLAMA_CPP_DIR=${llamaCppDir}"
-                cppFlags "-O3", "-DNDEBUG"
-            }
-        }
-    }
-
-    externalNativeBuild {
-        cmake {
-            path "src/main/cpp/CMakeLists.txt"
-            version "3.18.1"
-        }
-    }
-
-    buildTypes {
-        release {
-            signingConfig signingConfigs.debug
-        }
-    }
-}
-
-dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-}
-GRADLE
+          {
+            echo 'plugins {'
+            echo '    id "com.android.library"'
+            echo '    id "kotlin-android"'
+            echo '}'
+            echo ''
+            echo 'android {'
+            echo '    namespace "com.example.llamafu"'
+            echo '    compileSdk 34'
+            echo ''
+            echo '    compileOptions {'
+            echo '        sourceCompatibility JavaVersion.VERSION_17'
+            echo '        targetCompatibility JavaVersion.VERSION_17'
+            echo '    }'
+            echo ''
+            echo '    kotlinOptions {'
+            echo "        jvmTarget = '17'"
+            echo '    }'
+            echo ''
+            echo '    sourceSets {'
+            echo '        main.java.srcDirs += "src/main/kotlin"'
+            echo '    }'
+            echo ''
+            echo '    defaultConfig {'
+            echo '        minSdk 21'
+            echo '        targetSdk 34'
+            echo ''
+            echo '        externalNativeBuild {'
+            echo '            cmake {'
+            echo '                def llamaCppDir = System.getenv("LLAMA_CPP_DIR") ?: project.findProperty("llama.cpp.dir") ?: "${projectDir}/../../../llama.cpp"'
+            echo '                arguments "-DLLAMA_CPP_DIR=${llamaCppDir}"'
+            echo '                cppFlags "-O3", "-DNDEBUG"'
+            echo '            }'
+            echo '        }'
+            echo '    }'
+            echo ''
+            echo '    externalNativeBuild {'
+            echo '        cmake {'
+            echo '            path "src/main/cpp/CMakeLists.txt"'
+            echo '            version "3.18.1"'
+            echo '        }'
+            echo '    }'
+            echo ''
+            echo '    buildTypes {'
+            echo '        release {'
+            echo '            signingConfig signingConfigs.debug'
+            echo '        }'
+            echo '    }'
+            echo '}'
+            echo ''
+            echo 'dependencies {'
+            echo '    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"'
+            echo '}'
+          } > "$LLAMAFU_BUILD"
 
       - name: Build APK
         run: flutter build apk --release
