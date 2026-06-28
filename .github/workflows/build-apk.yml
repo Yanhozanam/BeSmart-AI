@@ -44,8 +44,14 @@ jobs:
           else
             CPP_DIR="$PUB_CACHE_DIR/hosted/pub.dev/llama.cpp"
           fi
-          echo "Cloning llama.cpp to: $CPP_DIR"
-          git clone --depth 1 https://github.com/ggml-org/llama.cpp "$CPP_DIR"
+          LLAMA_COMMIT="b96b82fc852b83ea6f58ffcdc264308f60f79211"
+          echo "Cloning llama.cpp (pinned to $LLAMA_COMMIT) to: $CPP_DIR"
+          git init "$CPP_DIR"
+          cd "$CPP_DIR"
+          git remote add origin https://github.com/ggml-org/llama.cpp
+          git fetch --depth 1 origin "$LLAMA_COMMIT"
+          git checkout FETCH_HEAD
+          cd -
           echo "LLAMA_CPP_DIR=$CPP_DIR" >> $GITHUB_ENV
 
       - name: Rewrite llamafu build.gradle for AGP 8.11 compatibility
