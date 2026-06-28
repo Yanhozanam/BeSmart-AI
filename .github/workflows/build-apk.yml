@@ -48,21 +48,68 @@ jobs:
           git clone --depth 1 https://github.com/ggml-org/llama.cpp "$CPP_DIR"
           echo "LLAMA_CPP_DIR=$CPP_DIR" >> $GITHUB_ENV
 
-      - name: Patch llamafu build.gradle for AGP 8.11 compatibility
+      - name: Rewrite llamafu build.gradle for AGP 8.11 compatibility
         run: |
           LLAMAFU_BUILD="$HOME/.pub-cache/hosted/pub.dev/llamafu-0.1.0/android/build.gradle"
-          if [ -f "$LLAMAFU_BUILD" ]; then
-            echo "Patching $LLAMAFU_BUILD"
-            sed -i 's/compileSdkVersion 34/compileSdk 34/' "$LLAMAFU_BUILD"
-            sed -i 's/minSdkVersion 21/minSdk 21/' "$LLAMAFU_BUILD"
-            sed -i 's/targetSdkVersion 33/targetSdk 33/' "$LLAMAFU_BUILD"
-            sed -i 's/VERSION_1_8/VERSION_17/' "$LLAMAFU_BUILD"
-            sed -i "s|jvmTarget = '1.8'|jvmTarget = '17'|" "$LLAMAFU_BUILD"
-            grep -n "namespace\|compileSdk\|minSdk\|targetSdk\|jvmTarget" "$LLAMAFU_BUILD"
-          else
-            echo "WARNING: llamafu build.gradle not found at $LLAMAFU_BUILD"
-            find "$HOME/.pub-cache" -name "build.gradle" -path "*/llamafu*" 2>/dev/null
+          if [ ! -f "$LLAMAFU_BUILD" ]; then
+            echo "Looking for llamafu build.gradle..."
+            LLAMAFU_BUILD=$(find "$HOME/.pub-cache" -name "build.gradle" -path "*/llamafu*/android/*" 2>/dev/null | head -1)
           fi
+          echo "Patching: $LLAMAFU_BUILD"
+          cat > "$LLAMAFU_BUILD" << 'GRADLE'
+plugins {
+    id "com.android.library"
+    id "kotlin-android"
+}
+
+android {
+    namespace "com.example.llamafu"
+    compileSdk 34
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    defaultConfig {
+        minSdk 21
+        targetSdk 34
+
+        externalNativeBuild {
+            cmake {
+                def llamaCppDir = System.getenv("LLAMA_CPP_DIR") ?: project.findProperty("llama.cpp.dir") ?: "${projectDir}/../../../llama.cpp"
+                arguments "-DLLAMA_CPP_DIR=${llamaCppDir}"
+                cppFlags "-O3", "-DNDEBUG"
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.18.1"
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
+        }
+    }
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+}
+GRADLE
 
       - name: Build APK
         run: flutter build apk --release
