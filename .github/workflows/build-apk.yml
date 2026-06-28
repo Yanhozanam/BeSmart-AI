@@ -54,7 +54,7 @@ jobs:
           cd -
           echo "LLAMA_CPP_DIR=$CPP_DIR" >> $GITHUB_ENV
 
-      - name: Rewrite llamafu build.gradle for AGP 8.11 compatibility
+      - name: Patch llamafu source files for AGP 8.11 + NDK 27 compatibility
         run: |
           LLAMAFU_BUILD="$HOME/.pub-cache/hosted/pub.dev/llamafu-0.1.0/android/build.gradle"
           if [ ! -f "$LLAMAFU_BUILD" ]; then
@@ -115,6 +115,11 @@ jobs:
             echo '    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"'
             echo '}'
           } > "$LLAMAFU_BUILD"
+
+          # Also patch llamafu's CMakeLists.txt to disable GGML_STATIC (incompatible with NDK 27+)
+          LLAMAFU_CMAKE="$(dirname "$(dirname "$LLAMAFU_BUILD")")/src/main/cpp/CMakeLists.txt"
+          echo "Patching CMakeLists.txt at: $LLAMAFU_CMAKE"
+          sed -i 's/set(GGML_STATIC ON)/set(GGML_STATIC OFF)/' "$LLAMAFU_CMAKE"
 
       - name: Build APK
         run: flutter build apk --release
