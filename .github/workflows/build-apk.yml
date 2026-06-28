@@ -130,6 +130,20 @@ jobs:
           echo "Patching llama-mmap.cpp at: $LLAMA_MMAP"
           sed -i 's/posix_madvise/madvise/g; s/POSIX_MADV_WILLNEED/MADV_WILLNEED/g; s/POSIX_MADV_RANDOM/MADV_RANDOM/g' "$LLAMA_MMAP"
 
+          # Patch tools/CMakeLists.txt to ONLY build mtmd (skip broken tools like cli)
+          TOOLS_CMAKE="$LLAMA_CPP_DIR/tools/CMakeLists.txt"
+          echo "Patching tools/CMakeLists.txt at: $TOOLS_CMAKE"
+          python3 -c "
+import re
+with open('$TOOLS_CMAKE', 'r') as f:
+    content = f.read()
+# Replace everything between else() and endif() with just mtmd
+content = re.sub(r'else\(\)\n(.*?)\nendif\(\)', 'else()\n    add_subdirectory(mtmd)\nendif()', content, flags=re.DOTALL)
+with open('$TOOLS_CMAKE', 'w') as f:
+    f.write(content)
+print('Patched tools/CMakeLists.txt')
+"
+
       - name: Build APK
         run: flutter build apk --release
 
