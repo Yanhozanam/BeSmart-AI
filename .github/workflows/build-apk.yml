@@ -134,6 +134,11 @@ jobs:
           echo "Patching llama-mmap.cpp at: $LLAMA_MMAP"
           sed -i 's/posix_madvise/madvise/g; s/POSIX_MADV_WILLNEED/MADV_WILLNEED/g; s/POSIX_MADV_RANDOM/MADV_RANDOM/g' "$LLAMA_MMAP"
 
+          # Patch mtmd CMakeLists.txt: LLAMA_INSTALL_VERSION is not set in this build
+          MTMD_CMAKE="$LLAMA_CPP_DIR/tools/mtmd/CMakeLists.txt"
+          echo "Patching mtmd CMakeLists.txt at: $MTMD_CMAKE"
+          sed -i 's/VERSION ${LLAMA_INSTALL_VERSION}/VERSION "0.0.0"/' "$MTMD_CMAKE"
+
       - name: Build APK
         run: flutter build apk --release
 
