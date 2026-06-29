@@ -143,6 +143,7 @@ jobs:
           # Multimodal support source files from llama.cpp/tools/mtmd
           target_sources(llamafu PRIVATE
               ${LLAMA_CPP_DIR}/tools/mtmd/clip.cpp
+              ${LLAMA_CPP_DIR}/tools/mtmd/mtmd.cpp
               ${LLAMA_CPP_DIR}/tools/mtmd/mtmd-audio.cpp
               ${LLAMA_CPP_DIR}/tools/mtmd/mtmd-helper.cpp
               ${LLAMA_CPP_DIR}/tools/mtmd/models/cogvlm.cpp
