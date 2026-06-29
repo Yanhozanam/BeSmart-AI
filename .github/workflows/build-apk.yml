@@ -119,14 +119,15 @@ jobs:
           EOF
 
           # Patch llamafu's CMakeLists.txt: disable GGML_STATIC, disable common (avoids server-context),
-          # disable tools (they're not needed and mtmd/cli don't build cleanly)
+          # disable tools (add mtmd directly via add_subdirectory instead)
           LLAMAFU_CMAKE="$(dirname "$LLAMAFU_BUILD")/src/main/cpp/CMakeLists.txt"
           echo "Patching CMakeLists.txt at: $LLAMAFU_CMAKE"
           sed -i 's/set(GGML_STATIC ON)/set(GGML_STATIC OFF)/' "$LLAMAFU_CMAKE"
           sed -i '/^set(LLAMA_BUILD_EXAMPLES OFF)/a set(LLAMA_CURL OFF)' "$LLAMAFU_CMAKE"
           sed -i '/^set(LLAMA_BUILD_EXAMPLES OFF)/a set(LLAMA_BUILD_TOOLS OFF)' "$LLAMAFU_CMAKE"
           sed -i '/^set(LLAMA_BUILD_EXAMPLES OFF)/a set(LLAMA_BUILD_COMMON OFF)' "$LLAMAFU_CMAKE"
-          sed -i '/mtmd/d' "$LLAMAFU_CMAKE"
+          sed -i '/^add_subdirectory.*EXCLUDE_FROM_ALL/a add_subdirectory(${LLAMA_CPP_DIR}/tools/mtmd mtmd)' "$LLAMAFU_CMAKE"
+          sed -i '/^        ggml$/a\        mtmd' "$LLAMAFU_CMAKE"
 
           # Patch llama-mmap.cpp for NDK 27: posix_madvise -> madvise
           LLAMA_MMAP="$LLAMA_CPP_DIR/src/llama-mmap.cpp"
