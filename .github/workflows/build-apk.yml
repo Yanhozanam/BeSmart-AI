@@ -163,6 +163,10 @@ jobs:
           )
           CMAKEOF
 
+      - name: Fix Gradle JVM heap for R8 (OOM with mtmd sources)
+        run: |
+          sed -i 's/org.gradle.jvmargs=-Xmx[0-9]*m -XX:MaxMetaspaceSize=[0-9]*m/org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g/' android/gradle.properties
+
       - name: Build APK
         run: flutter build apk --release
 
