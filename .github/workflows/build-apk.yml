@@ -136,13 +136,14 @@ jobs:
           # Patch tools/CMakeLists.txt to ONLY build mtmd (skip broken tools like cli)
           TOOLS_CMAKE="$LLAMA_CPP_DIR/tools/CMakeLists.txt"
           echo "Patching tools/CMakeLists.txt at: $TOOLS_CMAKE"
-          cat > "$TOOLS_CMAKE" << 'EOF'
-# tools
-if (EMSCRIPTEN)
-else()
-    add_subdirectory(mtmd)
-endif()
-EOF
+          # Overwrite tools/CMakeLists.txt to build only mtmd
+          {
+            echo '# tools'
+            echo 'if (EMSCRIPTEN)'
+            echo 'else()'
+            echo '    add_subdirectory(mtmd)'
+            echo 'endif()'
+          } > "$TOOLS_CMAKE"
 
       - name: Build APK
         run: flutter build apk --release
