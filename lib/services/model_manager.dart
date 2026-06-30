@@ -63,7 +63,7 @@ class ModelManager {
     if (!await modelFile.exists()) return false;
     try {
       final size = await modelFile.length();
-      return size == ModelConfig.expectedSizeBytes;
+      return size >= ModelConfig.expectedSizeBytes - 1024;
     } catch (_) {
       return false;
     }
@@ -83,7 +83,7 @@ class ModelManager {
       final modelFile = File(_appModelPath);
       if (await modelFile.exists()) {
         final size = await modelFile.length();
-        if (size == ModelConfig.expectedSizeBytes) {
+        if (size >= ModelConfig.expectedSizeBytes - 1024) {
           await _loadModel();
           return;
         }
