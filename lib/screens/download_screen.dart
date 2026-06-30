@@ -76,7 +76,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
       final partialSize = await partialFile.length();
         setState(() {
           _received = partialSize;
-          _progress = partialSize / ModelConfig.expectedSizeBytes;
+          _progress = (partialSize / ModelConfig.expectedSizeBytes).clamp(0.0, 1.0);
         });
     }
 
