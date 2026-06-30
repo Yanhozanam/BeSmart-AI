@@ -107,8 +107,9 @@ class ModelManager {
       final response = await request.close();
 
       if (response.statusCode == 200 || response.statusCode == 206) {
-        final totalBytes = response.headers.value('content-length') != null
-            ? int.parse(response.headers.value('content-length')!)
+        final headerLength = response.headers.value('content-length');
+        final int totalBytes = headerLength != null
+            ? startByte + int.parse(headerLength)
             : ModelConfig.expectedSizeBytes;
         int receivedBytes = startByte;
 
@@ -124,7 +125,7 @@ class ModelManager {
             }
             sink.add(chunk);
             receivedBytes += chunk.length;
-            final progress = receivedBytes / totalBytes;
+            final progress = (receivedBytes / totalBytes).clamp(0.0, 1.0);
             _updateStatus(ModelInfo(
               status: ModelStatus.downloading,
               displayName: ModelConfig.modelName,
@@ -137,7 +138,7 @@ class ModelManager {
         }
 
         if (!_downloadCanceled) {
-          if (receivedBytes == totalBytes) {
+          if (receivedBytes >= totalBytes - 1024) {
             await partialFile.rename(modelFile.path);
             await _loadModel();
           } else {
