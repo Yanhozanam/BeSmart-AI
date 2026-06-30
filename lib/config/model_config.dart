@@ -4,8 +4,8 @@ class ModelConfig {
   static const String downloadUrl =
       'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf';
   static const String fileName = 'qwen2.5-1.5b-instruct-q4_k_m.gguf';
-  static const String sha256 = 'skip_for_now';
-  static const int expectedSizeBytes = 1202590848;
+  static const String sha256 = '6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e';
+  static const int expectedSizeBytes = 1117320736;
 
   static const int recommendedThreads = 4;
   static const int contextSize = 2048;

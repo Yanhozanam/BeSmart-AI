@@ -107,7 +107,9 @@ class ModelManager {
       final response = await request.close();
 
       if (response.statusCode == 200 || response.statusCode == 206) {
-        const totalBytes = ModelConfig.expectedSizeBytes;
+        final totalBytes = response.headers.value('content-length') != null
+            ? int.parse(response.headers.value('content-length')!)
+            : ModelConfig.expectedSizeBytes;
         int receivedBytes = startByte;
 
         final sink = partialFile.openWrite(

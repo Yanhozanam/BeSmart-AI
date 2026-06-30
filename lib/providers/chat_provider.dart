@@ -86,19 +86,19 @@ class ChatProvider extends ChangeNotifier {
 
   String _buildPrompt(String userMessage, List<Message> history) {
     final buffer = StringBuffer();
-    buffer.writeln('<|system|>');
-    buffer.writeln('You are BeSmartAI, a helpful offline study assistant for university students. Be concise, clear, and helpful.<|end|>');
+    buffer.writeln('<|im_start|>system');
+    buffer.writeln('You are BeSmartAI, a helpful offline study assistant for university students. Be concise, clear, and helpful.<|im_end|>');
 
     final context = history.length > 1 ? history.sublist(0, history.length - 1) : <Message>[];
     for (final msg in context.reversed.take(10).toList().reversed) {
       final role = msg.isUser ? 'user' : 'assistant';
-      buffer.writeln('<|$role|>');
-      buffer.writeln('${msg.content}<|end|>');
+      buffer.writeln('<|im_start|>$role');
+      buffer.writeln('${msg.content}<|im_end|>');
     }
 
-    buffer.writeln('<|user|>');
-    buffer.writeln('$userMessage<|end|>');
-    buffer.writeln('<|assistant|>');
+    buffer.writeln('<|im_start|>user');
+    buffer.writeln('$userMessage<|im_end|>');
+    buffer.writeln('<|im_start|>assistant');
     return buffer.toString();
   }
 
