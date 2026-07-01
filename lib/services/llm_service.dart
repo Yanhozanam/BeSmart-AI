@@ -1,4 +1,7 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:llamafu/llamafu.dart';
+import 'package:path_provider/path_provider.dart';
 import '../config/model_config.dart';
 
 abstract class LLMService {
@@ -50,11 +53,60 @@ class RealLLMService implements LLMService {
 
   @override
   Future<void> initialize() async {
-    _llamafu = await Llamafu.init(
-      modelPath: modelPath,
-      threads: ModelConfig.recommendedThreads,
-      contextSize: contextSize,
-    );
+    await _tryLoad(modelPath);
+  }
+
+  Future<void> _tryLoad(String path) async {
+    final file = File(path);
+    debugPrint('[RealLLMService] Loading model from: $path');
+    debugPrint('[RealLLMService] File exists: ${await file.exists()}');
+    if (await file.exists()) {
+      debugPrint('[RealLLMService] File size: ${await file.length()} bytes');
+    }
+
+    // Log each _isValidFilePath check (mirrors llamafu's validation)
+    debugPrint('[RealLLMService] Path validation checks:');
+    debugPrint('  - contains null byte: ${path.contains('\x00')}');
+    debugPrint('  - contains "..": ${path.contains('..')}');
+    debugPrint('  - starts with /etc/: ${path.startsWith('/etc/')}');
+    debugPrint('  - starts with /usr/: ${path.startsWith('/usr/')}');
+    debugPrint('  - starts with /system/: ${path.startsWith('/system/')}');
+    debugPrint('  - contains /proc/: ${path.contains('/proc/')}');
+    debugPrint('  - contains /dev/: ${path.contains('/dev/')}');
+    debugPrint('  - length > 4096: ${path.length > 4096}');
+    debugPrint('  - path length: ${path.length}');
+
+    try {
+      _llamafu = await Llamafu.init(
+        modelPath: path,
+        threads: ModelConfig.recommendedThreads,
+        contextSize: contextSize,
+      );
+    } on ArgumentError catch (e) {
+      debugPrint('[RealLLMService] ArgumentError loading from original path: $e');
+      debugPrint('[RealLLMService] Trying fallback path in temp directory...');
+
+      final tempDir = await getTemporaryDirectory();
+      final fallbackPath = '${tempDir.path}/${ModelConfig.fileName}';
+      final fallbackFile = File(fallbackPath);
+
+      if (await file.exists()) {
+        await fallbackFile.parent.create(recursive: true);
+        await file.copy(fallbackPath);
+        debugPrint('[RealLLMService] Copied model to fallback path: $fallbackPath');
+        debugPrint('[RealLLMService] Fallback file exists: ${await fallbackFile.exists()}');
+        debugPrint('[RealLLMService] Fallback file size: ${await fallbackFile.length()} bytes');
+
+        _llamafu = await Llamafu.init(
+          modelPath: fallbackPath,
+          threads: ModelConfig.recommendedThreads,
+          contextSize: contextSize,
+        );
+        debugPrint('[RealLLMService] Model loaded successfully from fallback path');
+      } else {
+        rethrow;
+      }
+    }
   }
 
   @override
