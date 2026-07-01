@@ -37,10 +37,12 @@ class MockLLMService implements LLMService {
 
 class RealLLMService implements LLMService {
   final String modelPath;
+  final int contextSize;
   Llamafu? _llamafu;
 
   RealLLMService({
     required this.modelPath,
+    this.contextSize = ModelConfig.contextSize,
   });
 
   @override
@@ -51,7 +53,7 @@ class RealLLMService implements LLMService {
     _llamafu = await Llamafu.init(
       modelPath: modelPath,
       threads: ModelConfig.recommendedThreads,
-      contextSize: ModelConfig.contextSize,
+      contextSize: contextSize,
     );
   }
 

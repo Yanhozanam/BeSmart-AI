@@ -185,7 +185,7 @@ class ModelManager {
     _downloadCanceled = true;
   }
 
-  Future<void> _loadModel() async {
+  Future<void> _loadModel({int? contextSize}) async {
     try {
       debugPrint('[ModelManager] Attempting to load model from: $_appModelPath');
       final file = File(_appModelPath);
@@ -199,6 +199,7 @@ class ModelManager {
 
       final real = RealLLMService(
         modelPath: _appModelPath,
+        contextSize: contextSize ?? ModelConfig.contextSize,
       );
       await real.initialize();
       _service.dispose();
@@ -213,6 +214,17 @@ class ModelManager {
     } catch (e) {
       _service.dispose();
       _service = MockLLMService();
+
+      if (contextSize == null && ModelConfig.contextSize > 512) {
+        debugPrint('[ModelManager] Failed with contextSize=${ModelConfig.contextSize}, retrying with 512...');
+        try {
+          await _loadModel(contextSize: 512);
+          return;
+        } catch (_) {
+          // Fall through to report original error
+        }
+      }
+
       debugPrint('[ModelManager] Failed to load model: $e');
       debugPrint('[ModelManager] Stack trace: ${StackTrace.current}');
       _updateStatus(ModelInfo(

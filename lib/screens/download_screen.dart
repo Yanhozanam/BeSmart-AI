@@ -19,7 +19,8 @@ class _DownloadScreenState extends State<DownloadScreen> {
   int _total = ModelConfig.expectedSizeBytes;
   bool _isDownloading = false;
   bool _hasError = false;
-  bool _noInternet = false;
+  String _errorMessage = '';
+  bool _isLoadError = false;
   StreamSubscription<ModelInfo>? _subscription;
 
   @override
@@ -42,25 +43,18 @@ class _DownloadScreenState extends State<DownloadScreen> {
       if (info.status == ModelStatus.error) {
         _hasError = true;
         _isDownloading = false;
-        _noInternet = _isNetworkError(info.errorMessage ?? '');
+        _errorMessage = info.errorMessage ?? '';
+        _isLoadError = _progress >= 1.0;
       } else if (info.status == ModelStatus.ready) {
         _isDownloading = false;
         _navigateToChat();
       } else if (info.status == ModelStatus.downloading) {
         _isDownloading = true;
         _hasError = false;
+        _errorMessage = '';
+        _isLoadError = false;
       }
     });
-  }
-
-  bool _isNetworkError(String message) {
-    final lower = message.toLowerCase();
-    return lower.contains('socket') ||
-        lower.contains('connection') ||
-        lower.contains('timeout') ||
-        lower.contains('network') ||
-        lower.contains('dns') ||
-        lower.contains('host');
   }
 
   Future<void> _checkAndStart() async {
@@ -87,7 +81,8 @@ class _DownloadScreenState extends State<DownloadScreen> {
     setState(() {
       _isDownloading = true;
       _hasError = false;
-      _noInternet = false;
+      _errorMessage = '';
+      _isLoadError = false;
     });
 
     try {
@@ -110,7 +105,8 @@ class _DownloadScreenState extends State<DownloadScreen> {
         setState(() {
           _isDownloading = false;
           _hasError = true;
-          _noInternet = _isNetworkError(e.toString());
+          _errorMessage = e.toString();
+          _isLoadError = _progress >= 1.0;
         });
       }
     }
@@ -127,9 +123,28 @@ class _DownloadScreenState extends State<DownloadScreen> {
     );
   }
 
+  void _skipToChat() {
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const ChatScreen()),
+    );
+  }
+
   String _formatMB(int bytes) {
     final mb = bytes / (1024 * 1024);
     return '${mb.toStringAsFixed(0)} MB';
+  }
+
+  String _formatError(String msg) {
+    // Clean up common error wrappers for readability
+    var clean = msg;
+    if (clean.startsWith('Exception: ')) {
+      clean = clean.substring(11);
+    }
+    if (clean.startsWith('ArgumentError: ')) {
+      clean = clean.substring(15);
+    }
+    return clean;
   }
 
   @override
@@ -143,10 +158,10 @@ class _DownloadScreenState extends State<DownloadScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Spacer(flex: 2),
-              const Icon(
+              Icon(
                 Icons.auto_awesome,
                 size: 80,
-                color: Color(0xFF00A884),
+                color: _hasError ? const Color(0xFF9E6A6A) : const Color(0xFF00A884),
               ),
               const SizedBox(height: 24),
               const Text(
@@ -158,30 +173,17 @@ class _DownloadScreenState extends State<DownloadScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              Text(
-                _hasError && _noInternet
-                    ? 'Connect to WiFi or mobile data to download BeSmartAI (1.12 GB). After this, no internet is needed.'
-                    : _hasError
-                        ? 'Download interrupted. Your progress is saved — tap Retry to continue.'
-                        : _isDownloading
-                            ? 'Downloading the AI model. This only happens once — after this, BeSmartAI works fully offline.'
-                            : 'Preparing to download the AI model...',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.white.withOpacity(0.7),
-                ),
-              ),
+              _buildStatusText(),
               const SizedBox(height: 40),
               if (_isDownloading || _progress > 0) ...[
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: LinearProgressIndicator(
-                    value: _progress,
+                    value: _isLoadError ? 1.0 : _progress,
                     minHeight: 12,
                     backgroundColor: Colors.white.withOpacity(0.1),
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      Color(0xFF00A884),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      _isLoadError ? Colors.redAccent : const Color(0xFF00A884),
                     ),
                   ),
                 ),
@@ -196,33 +198,114 @@ class _DownloadScreenState extends State<DownloadScreen> {
                 const SizedBox(height: 8),
                 Text(
                   '${(_progress * 100).toStringAsFixed(1)}%',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF00A884),
+                    color: _isLoadError ? Colors.redAccent : const Color(0xFF00A884),
                   ),
                 ),
               ],
               if (_hasError) ...[
-                const SizedBox(height: 32),
-                FilledButton.icon(
-                  onPressed: _isDownloading ? null : _onRetry,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Retry'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF00A884),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 32,
-                      vertical: 14,
-                    ),
-                  ),
-                ),
+                const SizedBox(height: 24),
+                _buildErrorMessage(),
               ],
               const Spacer(flex: 3),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildStatusText() {
+    if (_hasError && _isLoadError) {
+      return const Text(
+        'Model downloaded successfully but could not be loaded.\n'
+        'Your device may not have enough memory.',
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 14, color: Colors.white70),
+      );
+    }
+    if (_hasError) {
+      return const Text(
+        'Download interrupted.\nTap Retry to try again.',
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 14, color: Colors.white70),
+      );
+    }
+    if (_isDownloading) {
+      return const Text(
+        'Downloading the AI model. This only happens once — '
+        'after this, BeSmartAI works fully offline.',
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 14, color: Colors.white70),
+      );
+    }
+    return const Text(
+      'Preparing to download the AI model...',
+      textAlign: TextAlign.center,
+      style: TextStyle(fontSize: 14, color: Colors.white70),
+    );
+  }
+
+  Widget _buildErrorMessage() {
+    final display = _formatError(_errorMessage);
+
+    return Column(
+      children: [
+        if (display.isNotEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.red.withOpacity(0.3)),
+            ),
+            child: Text(
+              display,
+              style: const TextStyle(
+                color: Colors.redAccent,
+                fontSize: 12,
+                fontFamily: 'monospace',
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        const SizedBox(height: 24),
+        if (_isLoadError) ...[
+          FilledButton.icon(
+            onPressed: _isDownloading ? null : _onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF00A884),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _isDownloading ? null : _skipToChat,
+            icon: const Icon(Icons.chat),
+            label: const Text('Continue with Mock AI'),
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: Colors.white.withOpacity(0.3)),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+              foregroundColor: Colors.white70,
+            ),
+          ),
+        ] else ...[
+          FilledButton.icon(
+            onPressed: _isDownloading ? null : _onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF00A884),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
