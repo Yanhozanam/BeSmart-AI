@@ -82,31 +82,48 @@ class RealLLMService implements LLMService {
         threads: ModelConfig.recommendedThreads,
         contextSize: contextSize,
       );
-    } on ArgumentError catch (e) {
-      debugPrint('[RealLLMService] ArgumentError loading from original path: $e');
-      debugPrint('[RealLLMService] Trying fallback path in temp directory...');
+    } catch (e) {
+      debugPrint('[RealLLMService] Error loading from original path: $e');
+      debugPrint('[RealLLMService] Error type: ${e.runtimeType}');
 
-      final tempDir = await getTemporaryDirectory();
-      final fallbackPath = '${tempDir.path}/${ModelConfig.fileName}';
-      final fallbackFile = File(fallbackPath);
-
-      if (await file.exists()) {
-        await fallbackFile.parent.create(recursive: true);
-        await file.copy(fallbackPath);
-        debugPrint('[RealLLMService] Copied model to fallback path: $fallbackPath');
-        debugPrint('[RealLLMService] Fallback file exists: ${await fallbackFile.exists()}');
-        debugPrint('[RealLLMService] Fallback file size: ${await fallbackFile.length()} bytes');
-
-        _llamafu = await Llamafu.init(
-          modelPath: fallbackPath,
-          threads: ModelConfig.recommendedThreads,
-          contextSize: contextSize,
-        );
-        debugPrint('[RealLLMService] Model loaded successfully from fallback path');
-      } else {
-        rethrow;
+      if (e is ArgumentError) {
+        debugPrint('[RealLLMService] Trying fallback path in temp directory...');
+        try {
+          await _tryLoadFromFallback(file);
+          debugPrint('[RealLLMService] Model loaded successfully from fallback path');
+          return;
+        } catch (fallbackError) {
+          debugPrint('[RealLLMService] Fallback also failed: $fallbackError');
+          throw Exception(
+            'Model path rejected and fallback failed: $fallbackError',
+          );
+        }
       }
+
+      rethrow;
     }
+  }
+
+  Future<void> _tryLoadFromFallback(File originalFile) async {
+    final tempDir = await getTemporaryDirectory();
+    final fallbackPath = '${tempDir.path}/${ModelConfig.fileName}';
+    final fallbackFile = File(fallbackPath);
+
+    if (!await originalFile.exists()) {
+      throw Exception('Original model file not found at ${originalFile.path}');
+    }
+
+    await fallbackFile.parent.create(recursive: true);
+    await originalFile.copy(fallbackPath);
+    debugPrint('[RealLLMService] Copied model to fallback path: $fallbackPath');
+    debugPrint('[RealLLMService] Fallback file exists: ${await fallbackFile.exists()}');
+    debugPrint('[RealLLMService] Fallback file size: ${await fallbackFile.length()} bytes');
+
+    _llamafu = await Llamafu.init(
+      modelPath: fallbackPath,
+      threads: ModelConfig.recommendedThreads,
+      contextSize: contextSize,
+    );
   }
 
   @override
