@@ -86,21 +86,18 @@ class RealLLMService implements LLMService {
       debugPrint('[RealLLMService] Error loading from original path: $e');
       debugPrint('[RealLLMService] Error type: ${e.runtimeType}');
 
-      if (e is ArgumentError) {
-        debugPrint('[RealLLMService] Trying fallback path in temp directory...');
-        try {
-          await _tryLoadFromFallback(file);
-          debugPrint('[RealLLMService] Model loaded successfully from fallback path');
-          return;
-        } catch (fallbackError) {
-          debugPrint('[RealLLMService] Fallback also failed: $fallbackError');
-          throw Exception(
-            'Model path rejected and fallback failed: $fallbackError',
-          );
-        }
+      // Try temp fallback for ANY error — path validation, native init failure, etc.
+      debugPrint('[RealLLMService] Trying fallback path in temp directory...');
+      try {
+        await _tryLoadFromFallback(file);
+        debugPrint('[RealLLMService] Model loaded successfully from fallback path');
+        return;
+      } catch (fallbackError) {
+        debugPrint('[RealLLMService] Fallback also failed: $fallbackError');
+        throw Exception(
+          'Model load failed: $e (fallback error: $fallbackError)',
+        );
       }
-
-      rethrow;
     }
   }
 
