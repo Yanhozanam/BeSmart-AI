@@ -235,14 +235,15 @@ class _DownloadScreenState extends State<DownloadScreen> {
     }
     if (_isDownloading) {
       return const Text(
-        'Downloading the AI model. This only happens once — '
-        'after this, BeSmartAI works fully offline.',
+        'Wait a little bit, BeSmart is getting ready.\n'
+        'Just make sure you are connected to a good WiFi.',
         textAlign: TextAlign.center,
         style: TextStyle(fontSize: 14, color: Colors.white70),
       );
     }
     return const Text(
-      'Preparing to download the AI model...',
+      'Wait a little bit, BeSmart is getting ready.\n'
+      'Just make sure you are connected to a good WiFi.',
       textAlign: TextAlign.center,
       style: TextStyle(fontSize: 14, color: Colors.white70),
     );
