@@ -5,12 +5,14 @@ class Message extends HiveObject {
   final String content;
   final bool isUser;
   final DateTime timestamp;
+  final bool isStreaming;
 
   Message({
     required this.id,
     required this.content,
     required this.isUser,
     required this.timestamp,
+    this.isStreaming = false,
   });
 
   Message copyWith({
@@ -18,12 +20,14 @@ class Message extends HiveObject {
     String? content,
     bool? isUser,
     DateTime? timestamp,
+    bool? isStreaming,
   }) {
     return Message(
       id: id ?? this.id,
       content: content ?? this.content,
       isUser: isUser ?? this.isUser,
       timestamp: timestamp ?? this.timestamp,
+      isStreaming: isStreaming ?? this.isStreaming,
     );
   }
 

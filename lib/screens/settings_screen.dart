@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:path_provider/path_provider.dart';
+import '../config/model_config.dart';
 import '../providers/chat_provider.dart';
 import '../providers/model_provider.dart';
 import '../services/model_service.dart';
@@ -92,6 +95,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
               ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildSection(
+            context,
+            'Debug Info',
+            Icons.bug_report,
+            FutureBuilder<Map<String, String>>(
+              future: _getDebugInfo(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const SizedBox(
+                    height: 20,
+                    child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  );
+                }
+                final data = snapshot.data!;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: data.entries.map((e) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Text(
+                      '${e.key}: ${e.value}',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.6),
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  )).toList(),
+                );
+              },
             ),
           ),
           const SizedBox(height: 32),
@@ -320,6 +355,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _onModelTierChanged(String tier) async {
     setState(() => _modelTier = tier);
     await _storage.setModelTier(tier);
+  }
+
+  Future<Map<String, String>> _getDebugInfo() async {
+    final dir = await getApplicationDocumentsDirectory();
+    final modelPath = '${dir.path}/${ModelConfig.fileName}';
+    final modelFile = File(modelPath);
+    final exists = await modelFile.exists();
+    final size = exists ? await modelFile.length() : 0;
+
+    return {
+      'Model Path': modelPath,
+      'File Exists': exists.toString(),
+      'File Size': '$size bytes (${(size / 1048576).toStringAsFixed(1)} MB)',
+      'Expected Size': '${ModelConfig.expectedSizeBytes} bytes (${(ModelConfig.expectedSizeBytes / 1048576).toStringAsFixed(1)} MB)',
+      'Matches Size': (exists && size >= ModelConfig.expectedSizeBytes - 1024).toString(),
+    };
   }
 
   void _onClearChat() {

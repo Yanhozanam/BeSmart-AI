@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/chat_provider.dart';
 import '../providers/model_provider.dart';
+import '../services/model_service.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/typing_indicator.dart';
+import 'download_screen.dart';
 import 'settings_screen.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -58,6 +60,72 @@ class _ChatScreenState extends State<ChatScreen> {
     _provider.sendMessage(text);
   }
 
+  void _showModelOptions(BuildContext context, bool isError) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1F2C33),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isError ? 'Model Error' : 'Model Not Downloaded',
+                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                isError
+                    ? 'The AI model failed to load. Try reloading or re-downloading it.'
+                    : 'Download the AI model (1.04 GB) to get real AI responses. Works fully offline after download.',
+                style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const DownloadScreen()),
+                    );
+                  },
+                  icon: Icon(isError ? Icons.refresh : Icons.download),
+                  label: Text(isError ? 'Reload Model' : 'Download Model'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF00A884),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: Colors.white.withOpacity(0.3)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: const Text('Open Settings'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -107,6 +175,65 @@ class _ChatScreenState extends State<ChatScreen> {
       backgroundColor: const Color(0xFF111B21),
       body: Column(
         children: [
+          Consumer<ModelProvider>(
+            builder: (context, modelProvider, _) {
+              if (modelProvider.currentModel.status == ModelStatus.error ||
+                  modelProvider.currentModel.status == ModelStatus.notDownloaded) {
+                final isError = modelProvider.currentModel.status == ModelStatus.error;
+                return GestureDetector(
+                  onTap: () => _showModelOptions(context, isError),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    color: isError ? const Color(0xFF5C2E2E) : const Color(0xFF2E3A2E),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isError ? Icons.error_outline : Icons.cloud_download,
+                          color: isError ? Colors.redAccent : Colors.orangeAccent,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            isError
+                                ? 'Model error — tap to fix'
+                                : 'Model not downloaded — tap to download',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.9),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        Icon(Icons.chevron_right, color: Colors.white.withOpacity(0.5), size: 18),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              if (modelProvider.currentModel.status == ModelStatus.downloading) {
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  color: const Color(0xFF1A3A2A),
+                  child: Row(
+                    children: [
+                      const SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00A884)),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Downloading model... ${(modelProvider.currentModel.progress * 100).toStringAsFixed(0)}%',
+                        style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
           Expanded(
             child: Consumer<ChatProvider>(
               builder: (context, provider, _) {

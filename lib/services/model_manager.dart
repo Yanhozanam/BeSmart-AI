@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import '../config/model_config.dart';
+import 'device_info.dart';
 import 'llm_service.dart';
 
 enum ModelStatus { unavailable, downloading, ready, error }
@@ -49,8 +50,22 @@ class ModelManager {
     final dir = await getApplicationDocumentsDirectory();
     _modelDirPath = dir.path;
 
+    debugPrint('[ModelManager] Model path: $_appModelPath');
+    final modelFile = File(_appModelPath);
+    debugPrint('[ModelManager] File exists: ${await modelFile.exists()}');
+    if (await modelFile.exists()) {
+      debugPrint('[ModelManager] File size: ${await modelFile.length()} bytes');
+      debugPrint('[ModelManager] Expected size: ${ModelConfig.expectedSizeBytes} bytes');
+    } else {
+      debugPrint('[ModelManager] Model file not found at $_appModelPath');
+    }
+
     if (await _verifyModel()) {
-      await _loadModel();
+      try {
+        await _loadModel();
+      } catch (e) {
+        debugPrint('[ModelManager] Model load failed during init: $e');
+      }
     } else {
       _updateStatus(const ModelInfo(
         status: ModelStatus.unavailable,
@@ -172,6 +187,16 @@ class ModelManager {
 
   Future<void> _loadModel() async {
     try {
+      debugPrint('[ModelManager] Attempting to load model from: $_appModelPath');
+      final file = File(_appModelPath);
+      debugPrint('[ModelManager] File exists: ${await file.exists()}');
+      if (await file.exists()) {
+        debugPrint('[ModelManager] File size: ${await file.length()} bytes');
+      }
+
+      final deviceInfo = await DeviceInfo.detect();
+      debugPrint('[ModelManager] Device RAM: ${deviceInfo.ramMB}MB, Free storage: ${deviceInfo.freeStorageMB}MB');
+
       final real = RealLLMService(
         modelPath: _appModelPath,
       );
@@ -179,19 +204,23 @@ class ModelManager {
       _service.dispose();
       _service = real;
 
+      debugPrint('[ModelManager] Model loaded successfully');
       _updateStatus(const ModelInfo(
         status: ModelStatus.ready,
         displayName: ModelConfig.modelName,
         progress: 1.0,
       ));
     } catch (e) {
+      _service.dispose();
       _service = MockLLMService();
       debugPrint('[ModelManager] Failed to load model: $e');
+      debugPrint('[ModelManager] Stack trace: ${StackTrace.current}');
       _updateStatus(ModelInfo(
         status: ModelStatus.error,
         displayName: ModelConfig.modelName,
         errorMessage: e.toString(),
       ));
+      rethrow;
     }
   }
 
@@ -199,11 +228,19 @@ class ModelManager {
     return _service.generateResponse(input);
   }
 
+  Stream<String> generateStream(String prompt) {
+    return _service.generateStream(prompt);
+  }
+
   Future<bool> reloadModel() async {
     _service.dispose();
     _service = MockLLMService();
     if (await _verifyModel()) {
-      await _loadModel();
+      try {
+        await _loadModel();
+      } catch (e) {
+        debugPrint('[ModelManager] Model reload failed: $e');
+      }
     } else {
       _updateStatus(const ModelInfo(
         status: ModelStatus.unavailable,

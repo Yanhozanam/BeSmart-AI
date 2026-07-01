@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/message.dart';
 import '../services/identity_interceptor.dart';
@@ -49,28 +50,68 @@ class ChatProvider extends ChangeNotifier {
       final identityKey = IdentityInterceptor().intercept(input);
       if (identityKey != null) {
         final responseText = _resolveResponse(identityKey);
-        await _addResponse(responseText);
         _state = ChatState.idle;
         notifyListeners();
+        await _addResponse(responseText);
         return;
       }
 
-      final String result;
-      if (_modelManager.isReady) {
-        final prompt = _buildPrompt(input, _messages);
-        result = await _modelManager.generateResponse(prompt);
-      } else {
-        final responseKey = await _modelManager.generateResponse(input);
-        result = _resolveResponse(responseKey);
+      if (!_modelManager.isReady) {
+        final lang = _storage.getLanguage();
+        final msg = lang == 'fr'
+            ? "Le modèle n'est pas chargé. Allez dans Paramètres > Télécharger le modèle pour l'installer."
+            :             'Model is not loaded. Go to Settings > Download Model to install it.';
+        _state = ChatState.idle;
+        notifyListeners();
+        await _addResponse(msg);
+        return;
       }
 
-      await _addResponse(result);
-    } catch (e) {
-      await _addResponse('Sorry, something went wrong. Please try again.');
-    }
+      final prompt = _buildPrompt(input, _messages);
 
-    _state = ChatState.idle;
-    notifyListeners();
+      final aiMsg = Message(
+        id: _nextId(),
+        content: '',
+        isUser: false,
+        timestamp: DateTime.now(),
+        isStreaming: true,
+      );
+      _messages.add(aiMsg);
+      _state = ChatState.idle;
+      notifyListeners();
+
+      final buffer = StringBuffer();
+      await for (final token in _modelManager.generateStream(prompt)) {
+        buffer.write(token);
+        _messages[_messages.length - 1] = Message(
+          id: aiMsg.id,
+          content: buffer.toString(),
+          isUser: false,
+          timestamp: DateTime.now(),
+          isStreaming: true,
+        );
+        notifyListeners();
+      }
+
+      _messages[_messages.length - 1] = Message(
+        id: aiMsg.id,
+        content: buffer.toString(),
+        isUser: false,
+        timestamp: DateTime.now(),
+        isStreaming: false,
+      );
+      await _storage.addMessage(_messages.last);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[ChatProvider] Error: $e');
+      _state = ChatState.idle;
+      notifyListeners();
+      final lang = _storage.getLanguage();
+      final errMsg = lang == 'fr'
+          ? "Désolé, quelque chose s'est mal passé. Veuillez réessayer."
+          : 'Sorry, something went wrong. Please try again.';
+      await _addResponse(errMsg);
+    }
   }
 
   Future<void> _addResponse(String content) async {
@@ -79,9 +120,11 @@ class ChatProvider extends ChangeNotifier {
       content: content,
       isUser: false,
       timestamp: DateTime.now(),
+      isStreaming: false,
     );
     _messages.add(msg);
     await _storage.addMessage(msg);
+    notifyListeners();
   }
 
   String _buildPrompt(String userMessage, List<Message> history) {
@@ -91,9 +134,11 @@ class ChatProvider extends ChangeNotifier {
 
     final context = history.length > 1 ? history.sublist(0, history.length - 1) : <Message>[];
     for (final msg in context.reversed.take(10).toList().reversed) {
-      final role = msg.isUser ? 'user' : 'assistant';
-      buffer.writeln('<|im_start|>$role');
-      buffer.writeln('${msg.content}<|im_end|>');
+      if (msg.isUser || (!msg.isUser && !msg.isStreaming)) {
+        final role = msg.isUser ? 'user' : 'assistant';
+        buffer.writeln('<|im_start|>$role');
+        buffer.writeln('${msg.content}<|im_end|>');
+      }
     }
 
     buffer.writeln('<|im_start|>user');
@@ -119,11 +164,6 @@ class ChatProvider extends ChangeNotifier {
         return lang == 'fr'
             ? 'Non, je suis BeSmartAI — un assistant hors ligne conçu pour les étudiants.'
             : "No, I'm BeSmartAI — an offline assistant designed for students.";
-      case 'mockResponse':
-        final lang = _storage.getLanguage();
-        return lang == 'fr'
-            ? "C'est une excellente question ! En tant que BeSmartAI, je suis là pour vous aider dans vos études. Je peux vous aider avec des explications, des résumés et des conseils d'étude. Sur quelle matière travaillez-vous ?"
-            : "That's a great question! As BeSmartAI, I'm here to help you with your studies. I can assist with explanations, summaries, and study tips. What subject are you working on?";
       default:
         return key;
     }
