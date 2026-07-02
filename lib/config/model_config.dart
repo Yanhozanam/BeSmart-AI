@@ -17,10 +17,6 @@ class ModelConfig {
   static const double topP = 0.95;
 
   static Future<String> get modelDirectory async {
-    final dir = await getExternalStorageDirectory();
-    if (dir != null) {
-      return dir.path;
-    }
     final docsDir = await getApplicationDocumentsDirectory();
     return docsDir.path;
   }
