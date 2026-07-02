@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:llamafu/llamafu.dart';
-import 'package:path_provider/path_provider.dart';
 import '../config/model_config.dart';
 
 abstract class LLMService {
@@ -102,8 +101,8 @@ class RealLLMService implements LLMService {
   }
 
   Future<void> _tryLoadFromFallback(File originalFile) async {
-    final tempDir = await getTemporaryDirectory();
-    final fallbackPath = '${tempDir.path}/${ModelConfig.fileName}';
+    final fallbackDirPath = await ModelConfig.modelDirectory;
+    final fallbackPath = '$fallbackDirPath/${ModelConfig.fileName}';
     final fallbackFile = File(fallbackPath);
 
     if (!await originalFile.exists()) {

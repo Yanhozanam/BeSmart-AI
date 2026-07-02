@@ -1,3 +1,5 @@
+import 'package:path_provider/path_provider.dart';
+
 class ModelConfig {
   static const String modelName = 'BeSmartAI Qwen2.5';
   static const String version = '1.0.0';
@@ -13,4 +15,18 @@ class ModelConfig {
   static const int nGpuLayers = -1;
   static const double temperature = 0.7;
   static const double topP = 0.95;
+
+  static Future<String> get modelDirectory async {
+    final dir = await getExternalStorageDirectory();
+    if (dir != null) {
+      return dir.path;
+    }
+    final docsDir = await getApplicationDocumentsDirectory();
+    return docsDir.path;
+  }
+
+  static Future<String> get modelPath async {
+    final dir = await modelDirectory;
+    return '$dir/$fileName';
+  }
 }

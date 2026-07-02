@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 import '../config/model_config.dart';
 import '../services/model_manager.dart';
 import 'chat_screen.dart';
@@ -63,8 +62,8 @@ class _DownloadScreenState extends State<DownloadScreen> {
       return;
     }
 
-    final dir = await getApplicationDocumentsDirectory();
-    final partialFile = File('${dir.path}/${ModelConfig.fileName}.part');
+    final dir = await ModelConfig.modelDirectory;
+    final partialFile = File('$dir/${ModelConfig.fileName}.part');
 
     if (await partialFile.exists()) {
       final partialSize = await partialFile.length();

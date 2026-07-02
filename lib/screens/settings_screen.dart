@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:path_provider/path_provider.dart';
 import '../config/model_config.dart';
 import '../providers/chat_provider.dart';
 import '../providers/model_provider.dart';
@@ -358,8 +357,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<Map<String, String>> _getDebugInfo() async {
-    final dir = await getApplicationDocumentsDirectory();
-    final modelPath = '${dir.path}/${ModelConfig.fileName}';
+    final modelPath = await ModelConfig.modelPath;
     final modelFile = File(modelPath);
     final exists = await modelFile.exists();
     final size = exists ? await modelFile.length() : 0;

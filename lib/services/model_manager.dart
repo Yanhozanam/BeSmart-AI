@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 import '../config/model_config.dart';
 import 'device_info.dart';
 import 'llm_service.dart';
@@ -47,8 +46,7 @@ class ModelManager {
       '$_modelDirPath/${ModelConfig.fileName}.part';
 
   Future<void> initialize() async {
-    final dir = await getApplicationDocumentsDirectory();
-    _modelDirPath = dir.path;
+    _modelDirPath = await ModelConfig.modelDirectory;
 
     debugPrint('[ModelManager] Model path: $_appModelPath');
     final modelFile = File(_appModelPath);
@@ -159,6 +157,12 @@ class ModelManager {
 
         if (!_downloadCanceled) {
           if (receivedBytes >= totalBytes - 1024) {
+            final fileSize = await partialFile.length();
+            debugPrint('[ModelManager] Downloaded file size: $fileSize bytes');
+            debugPrint('[ModelManager] Expected size: ${ModelConfig.expectedSizeBytes} bytes');
+            if (fileSize < 1000000) {
+              throw Exception('Downloaded file is too small - download may have failed');
+            }
             await partialFile.rename(modelFile.path);
             await _loadModel();
           } else {
