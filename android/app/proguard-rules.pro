@@ -1,2 +1,4 @@
 -keep class com.besmartai.app.** { *; }
 -keep class com.horcrux.svg.** { *; }
+-keep class com.example.llamafu.** { *; }
+-keepclassmembers class com.example.llamafu.** { *; }

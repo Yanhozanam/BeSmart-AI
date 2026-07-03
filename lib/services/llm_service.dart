@@ -72,6 +72,16 @@ class RealLLMService implements LLMService {
     }
 
     try {
+      debugPrint('[RealLLMService] Path length: ${path.length}');
+      debugPrint('[RealLLMService] Path has null byte: ${path.contains('\0')}');
+      debugPrint('[RealLLMService] Path has "..": ${path.contains('..')}');
+      debugPrint('[RealLLMService] Path starts with /etc/: ${path.startsWith('/etc/')}');
+      debugPrint('[RealLLMService] Path starts with /usr/: ${path.startsWith('/usr/')}');
+      debugPrint('[RealLLMService] Path starts with /system/: ${path.startsWith('/system/')}');
+      debugPrint('[RealLLMService] Path contains /proc/: ${path.contains('/proc/')}');
+      debugPrint('[RealLLMService] Path contains /dev/: ${path.contains('/dev/')}');
+      debugPrint('[RealLLMService] Path > 4096: ${path.length > 4096}');
+
       _llamafu = await Llamafu.init(
         modelPath: path,
         threads: ModelConfig.recommendedThreads,
@@ -110,6 +120,9 @@ class RealLLMService implements LLMService {
     debugPrint('[RealLLMService] Fallback file exists: ${await fallbackFile.exists()}');
     debugPrint('[RealLLMService] Fallback file size: ${await fallbackFile.length()} bytes');
     debugPrint('[RealLLMService] Fallback path length: ${fallbackPath.length}');
+    debugPrint('[RealLLMService] Fallback path has "..": ${fallbackPath.contains('..')}');
+    debugPrint('[RealLLMService] Fallback path contains /proc/: ${fallbackPath.contains('/proc/')}');
+    debugPrint('[RealLLMService] Fallback path contains /dev/: ${fallbackPath.contains('/dev/')}');
 
     _llamafu = await Llamafu.init(
       modelPath: fallbackPath,
