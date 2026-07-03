@@ -18,3 +18,8 @@ ios/Flutter/ephemeral/
 ios/Flutter/flutter_export_environment.sh
 ios/Runner/GeneratedPluginRegistrant.h
 ios/Runner/GeneratedPluginRegistrant.m
+
+# llama.cpp source (cloned by CI)
+llama.cpp/
+# Build artifacts
+packages/llamafu/android/.cxx/

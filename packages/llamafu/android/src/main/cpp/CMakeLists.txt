@@ -24,13 +24,18 @@ include_directories(
     ${LLAMA_CPP_DIR}/common
     ${LLAMA_CPP_DIR}/ggml/include
     ${LLAMA_CPP_DIR}/tools/mtmd
+    ${LLAMA_CPP_DIR}/vendor
 )
 
 # Build llama.cpp as part of our build process
-set(GGML_STATIC ON)
+set(GGML_STATIC OFF)
 set(LLAMA_STATIC ON)
 set(LLAMA_BUILD_TESTS OFF)
 set(LLAMA_BUILD_EXAMPLES OFF)
+set(GGML_LLAMAFILE OFF)
+set(LLAMA_BUILD_COMMON OFF)
+set(LLAMA_BUILD_TOOLS OFF)
+set(LLAMA_CURL OFF)
 set(LLAMA_BUILD_SERVER OFF)
 
 # Add llama.cpp subdirectory
@@ -64,6 +69,27 @@ else()
         ggml
     )
 endif()
+
+# Multimodal support source files from llama.cpp/tools/mtmd
+target_sources(llamafu PRIVATE
+    ${LLAMA_CPP_DIR}/tools/mtmd/clip.cpp
+    ${LLAMA_CPP_DIR}/tools/mtmd/mtmd.cpp
+    ${LLAMA_CPP_DIR}/tools/mtmd/mtmd-audio.cpp
+    ${LLAMA_CPP_DIR}/tools/mtmd/mtmd-helper.cpp
+    ${LLAMA_CPP_DIR}/tools/mtmd/models/cogvlm.cpp
+    ${LLAMA_CPP_DIR}/tools/mtmd/models/conformer.cpp
+    ${LLAMA_CPP_DIR}/tools/mtmd/models/glm4v.cpp
+    ${LLAMA_CPP_DIR}/tools/mtmd/models/internvl.cpp
+    ${LLAMA_CPP_DIR}/tools/mtmd/models/kimivl.cpp
+    ${LLAMA_CPP_DIR}/tools/mtmd/models/llama4.cpp
+    ${LLAMA_CPP_DIR}/tools/mtmd/models/llava.cpp
+    ${LLAMA_CPP_DIR}/tools/mtmd/models/minicpmv.cpp
+    ${LLAMA_CPP_DIR}/tools/mtmd/models/pixtral.cpp
+    ${LLAMA_CPP_DIR}/tools/mtmd/models/qwen2vl.cpp
+    ${LLAMA_CPP_DIR}/tools/mtmd/models/qwen3vl.cpp
+    ${LLAMA_CPP_DIR}/tools/mtmd/models/siglip.cpp
+    ${LLAMA_CPP_DIR}/tools/mtmd/models/whisper-enc.cpp
+)
 
 # Create a test program
 add_executable(
