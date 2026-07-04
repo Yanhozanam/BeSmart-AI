@@ -50,7 +50,12 @@ android {
         externalNativeBuild {
             cmake {
                 def llamaCppDir = System.getenv("LLAMA_CPP_DIR") ?: project.findProperty("llama.cpp.dir") ?: "${projectDir}/../../../llama.cpp"
-                arguments "-DLLAMA_CPP_DIR=${llamaCppDir}"
+                arguments "-DLLAMA_CPP_DIR=${llamaCppDir}",
+                          "-DGGML_STATIC=ON",
+                          "-DGGML_SHARED=OFF",
+                          "-DBUILD_SHARED_LIBS=OFF",
+                          "-DLLAMA_BUILD_TESTS=OFF",
+                          "-DLLAMA_BUILD_EXAMPLES=OFF"
 
                 // Optimize build for release
                 cppFlags "-O3", "-DNDEBUG"
