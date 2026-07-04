@@ -61,14 +61,20 @@ jobs:
         run: |
           sed -i 's/org.gradle.jvmargs=-Xmx[0-9]*m/org.gradle.jvmargs=-Xmx4g/' android/gradle.properties
 
-      - name: Build release APK (arm64)
+      - name: Build release APK (arm64 for phones)
         run: flutter build apk --release --target-platform android-arm64
 
-      - name: Build release APK (x86_64 for emulator)
-        run: flutter build apk --release --target-platform android-x64
-
-      - name: Upload APKs
+      - name: Upload arm64 APK
         uses: actions/upload-artifact@v4
         with:
-          name: besmartai-apk
-          path: build/app/outputs/flutter-apk/*.apk
+          name: besmartai-arm64-apk
+          path: build/app/outputs/flutter-apk/*-arm64-v8a.apk
+
+      - name: Build release APK (x86_64 for emulators)
+        run: flutter build apk --release --target-platform android-x64
+
+      - name: Upload x86_64 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: besmartai-x86_64-apk
+          path: build/app/outputs/flutter-apk/*-x86_64.apk
