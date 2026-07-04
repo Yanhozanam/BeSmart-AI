@@ -30,7 +30,6 @@ jobs:
       - name: Install Android NDK 28.2.13676358
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "ndk;28.2.13676358"
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> $GITHUB_ENV
 
       - name: Accept Android licenses
         run: |
@@ -42,6 +41,7 @@ jobs:
       - name: Clone llama.cpp (pinned commit)
         run: |
           LLAMA_COMMIT="b96b82fc852b83ea6f58ffcdc264308f60f79211"
+          echo "Cloning llama.cpp (pinned to $LLAMA_COMMIT) to project root..."
           git clone --depth 1 https://github.com/ggml-org/llama.cpp llama.cpp
           cd llama.cpp
           git fetch --depth 1 origin "$LLAMA_COMMIT"
@@ -53,6 +53,7 @@ jobs:
         run: |
           LLAMA_MMAP="$LLAMA_CPP_DIR/src/llama-mmap.cpp"
           if [ -f "$LLAMA_MMAP" ]; then
+            echo "Patching llama-mmap.cpp: posix_madvise -> madvise"
             sed -i 's/posix_madvise/madvise/g; s/POSIX_MADV_WILLNEED/MADV_WILLNEED/g; s/POSIX_MADV_RANDOM/MADV_RANDOM/g' "$LLAMA_MMAP"
           fi
 
@@ -60,11 +61,11 @@ jobs:
         run: |
           sed -i 's/org.gradle.jvmargs=-Xmx[0-9]*m/org.gradle.jvmargs=-Xmx4g/' android/gradle.properties
 
+      - name: Build release APK (arm64)
+        run: flutter build apk --release --target-platform android-arm64
+
       - name: Build release APK (x86_64 for emulator)
         run: flutter build apk --release --target-platform android-x64
-
-      - name: Build release APK (arm64 for real devices)
-        run: flutter build apk --release --target-platform android-arm64
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
