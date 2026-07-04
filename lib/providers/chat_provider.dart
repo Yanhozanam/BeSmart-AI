@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/message.dart';
+import '../config/model_config.dart';
 import '../services/identity_interceptor.dart';
 import '../services/model_manager.dart';
 import '../services/storage_service.dart';
@@ -81,7 +82,17 @@ class ChatProvider extends ChangeNotifier {
       notifyListeners();
 
       final buffer = StringBuffer();
-      await for (final token in _modelManager.generateStream(prompt)) {
+
+      final stream = _modelManager.generateStream(prompt);
+      final timeoutStream = stream.timeout(
+        const Duration(seconds: 120),
+        onTimeout: (sink) {
+          sink.addError(TimeoutException('Inference timed out'));
+          sink.close();
+        },
+      );
+
+      await for (final token in timeoutStream) {
         buffer.write(token);
         _messages[_messages.length - 1] = Message(
           id: aiMsg.id,
@@ -107,9 +118,16 @@ class ChatProvider extends ChangeNotifier {
       _state = ChatState.idle;
       notifyListeners();
       final lang = _storage.getLanguage();
-      final errMsg = lang == 'fr'
-          ? "Désolé, quelque chose s'est mal passé. Veuillez réessayer."
-          : 'Sorry, something went wrong. Please try again.';
+      String errMsg;
+      if (e is TimeoutException) {
+        errMsg = lang == 'fr'
+            ? "Cela prend plus de temps que prévu. Essayez une question plus courte."
+            : 'This is taking longer than expected. Try a shorter question.';
+      } else {
+        errMsg = lang == 'fr'
+            ? "Désolé, quelque chose s'est mal passé. Veuillez réessayer."
+            : 'Sorry, something went wrong. Please try again.';
+      }
       await _addResponse(errMsg);
     }
   }
@@ -130,10 +148,10 @@ class ChatProvider extends ChangeNotifier {
   String _buildPrompt(String userMessage, List<Message> history) {
     final buffer = StringBuffer();
     buffer.writeln('<|im_start|>system');
-    buffer.writeln('You are BeSmartAI, a helpful offline study assistant for university students. Be concise, clear, and helpful.<|im_end|>');
+    buffer.writeln('${ModelConfig.systemPrompt}<|im_end|>');
 
     final context = history.length > 1 ? history.sublist(0, history.length - 1) : <Message>[];
-    for (final msg in context.reversed.take(10).toList().reversed) {
+    for (final msg in context.reversed.take(2).toList().reversed) {
       if (msg.isUser || (!msg.isUser && !msg.isStreaming)) {
         final role = msg.isUser ? 'user' : 'assistant';
         buffer.writeln('<|im_start|>$role');

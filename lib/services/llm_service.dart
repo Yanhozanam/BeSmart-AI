@@ -84,7 +84,7 @@ class RealLLMService implements LLMService {
 
       _llamafu = await Llamafu.init(
         modelPath: path,
-        threads: ModelConfig.recommendedThreads,
+        threads: ModelConfig.threads,
         contextSize: contextSize,
       );
     } catch (e) {
@@ -126,7 +126,7 @@ class RealLLMService implements LLMService {
 
     _llamafu = await Llamafu.init(
       modelPath: fallbackPath,
-      threads: ModelConfig.recommendedThreads,
+      threads: ModelConfig.threads,
       contextSize: contextSize,
     );
   }

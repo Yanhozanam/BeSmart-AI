@@ -13,6 +13,9 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <queue>
+#include <mutex>
+#include <atomic>
 
 // Include CLIP for multimodal support (C++ header, no extern "C")
 #include "../../llama.cpp/tools/mtmd/clip.h"
@@ -36,6 +39,13 @@ struct LlamafuBatch_s {
     llama_batch batch;
 };
 
+struct StreamState {
+    std::mutex mtx;
+    std::queue<std::string> tokens;
+    std::atomic<bool> completed{false};
+    std::atomic<bool> error{false};
+};
+
 struct Llamafu_s {
     llama_model* model;
     llama_context* ctx;
@@ -45,6 +55,7 @@ struct Llamafu_s {
     llama_sampler* default_sampler;
     LlamafuAbortCallback abort_callback;
     void* abort_callback_data;
+    StreamState stream_state;
 
     // Multimodal support
     struct clip_ctx* clip_ctx_vision;      // CLIP vision context
@@ -53,6 +64,16 @@ struct Llamafu_s {
 
     // Image processing cache
     std::map<std::string, std::vector<float>> image_embeddings_cache;
+
+    Llamafu_s(llama_model* m, llama_context* c, bool mm)
+        : model(m), ctx(c), is_multimodal(mm),
+          lora_adapters(), samplers(),
+          default_sampler(nullptr),
+          abort_callback(nullptr), abort_callback_data(nullptr),
+          stream_state(),
+          clip_ctx_vision(nullptr), clip_ctx_audio(nullptr),
+          vision_initialized(false),
+          image_embeddings_cache() {}
 };
 
 static bool validate_string_param(const char* param, const char* param_name) {
@@ -148,14 +169,7 @@ LlamafuError llamafu_init(LlamafuModelParams* params, Llamafu* out_llamafu) {
         // Check if model supports multimodal (simplified check)
         bool is_multimodal = params->mmproj_path && strlen(params->mmproj_path) > 0;
 
-        Llamafu llamafu = new Llamafu_s{
-            model, ctx, is_multimodal,
-            std::map<LlamafuLoraAdapter, llama_adapter_lora*>{},
-            std::vector<LlamafuSampler>{},
-            nullptr, nullptr, nullptr,
-            nullptr, nullptr, false,
-            std::map<std::string, std::vector<float>>{}
-        };
+        Llamafu llamafu = new Llamafu_s(model, ctx, is_multimodal);
 
         // Initialize CLIP context if multimodal is enabled
         if (is_multimodal) {
@@ -3750,7 +3764,7 @@ LlamafuError llamafu_complete_stream(
     LlamafuStreamCallback callback,
     void* user_data
 ) {
-    if (!llamafu || !params || !callback) {
+    if (!llamafu || !params) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
 
@@ -3758,98 +3772,155 @@ LlamafuError llamafu_complete_stream(
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
 
-    try {
-        // Tokenize prompt
-        const llama_vocab* vocab = llama_model_get_vocab(llamafu->model);
-        const int32_t text_len = static_cast<int32_t>(strlen(params->prompt));
-        const int32_t n_tokens_max = text_len + 16;
-        std::vector<llama_token> tokens(n_tokens_max);
-
-        const int32_t n_tokens = llama_tokenize(vocab, params->prompt, text_len, tokens.data(), n_tokens_max, true, true);
-        if (n_tokens < 0) {
-            return LLAMAFU_ERROR_INVALID_PARAM;
+    // Reset stream state
+    {
+        std::lock_guard<std::mutex> lock(llamafu->stream_state.mtx);
+        while (!llamafu->stream_state.tokens.empty()) {
+            llamafu->stream_state.tokens.pop();
         }
-        tokens.resize(n_tokens);
-
-        if (tokens.empty()) {
-            return LLAMAFU_ERROR_INVALID_PARAM;
-        }
-
-        // Clear the KV cache
-        llama_memory_clear(llama_get_memory(llamafu->ctx), false);
-
-        // Evaluate the prompt tokens
-        if (llama_decode(llamafu->ctx, llama_batch_get_one(tokens.data(), tokens.size())) != 0) {
-            return LLAMAFU_ERROR_UNKNOWN;
-        }
-
-        // Build sampler chain from params (use defaults for unset fields)
-        float temperature = params->temperature > 0.0f ? params->temperature : 0.8f;
-        int32_t top_k = params->top_k > 0 ? params->top_k : 40;
-        float top_p = params->top_p > 0.0f ? params->top_p : 0.95f;
-        float repeat_penalty = params->repeat_penalty > 0.0f ? params->repeat_penalty : 1.1f;
-        uint32_t seed = params->seed > 0 ? params->seed : 42;
-
-        llama_sampler* smpl = build_sampler_chain(temperature, top_k, top_p, repeat_penalty, seed);
-        if (!smpl) {
-            return LLAMAFU_ERROR_OUT_OF_MEMORY;
-        }
-
-        // Generate tokens with streaming
-        const int32_t max_tokens = params->max_tokens > 0 ? params->max_tokens : 256;
-        int32_t n_cur = static_cast<int32_t>(tokens.size());
-        const int32_t n_ctx = llama_n_ctx(llamafu->ctx);
-
-        for (int32_t i = 0; i < max_tokens; i++) {
-            // Check abort callback
-            if (llamafu->abort_callback && llamafu->abort_callback(llamafu->abort_callback_data)) {
-                llama_sampler_free(smpl);
-                return LLAMAFU_ERROR_ABORTED;
-            }
-
-            // Sample next token
-            llama_token new_token = llama_sampler_sample(smpl, llamafu->ctx, -1);
-
-            // Check for end of generation
-            if (llama_vocab_is_eog(vocab, new_token)) {
-                break;
-            }
-
-            // Convert token to text
-            char piece[256] = {0};
-            int32_t n = llama_token_to_piece(vocab, new_token, piece, sizeof(piece) - 1, 0, true);
-            if (n < 0) {
-                n = 0;
-            }
-            piece[n] = '\0';
-
-            // Call the callback with the token
-            // Note: Dart copies the string data via toDartString()
-            callback(piece, user_data);
-
-            // Accept the token to update sampler state
-            llama_sampler_accept(smpl, new_token);
-
-            // Check context overflow
-            if (n_cur >= n_ctx - 1) {
-                break;
-            }
-
-            // Evaluate the new token
-            if (llama_decode(llamafu->ctx, llama_batch_get_one(&new_token, 1)) != 0) {
-                llama_sampler_free(smpl);
-                return LLAMAFU_ERROR_UNKNOWN;
-            }
-
-            n_cur++;
-        }
-
-        llama_sampler_free(smpl);
-        return LLAMAFU_SUCCESS;
-
-    } catch (const std::exception& e) {
-        return LLAMAFU_ERROR_UNKNOWN;
+        llamafu->stream_state.completed = false;
+        llamafu->stream_state.error = false;
     }
+
+    // Copy params to heap so the worker thread can safely access them
+    LlamafuInferParams* params_copy = new LlamafuInferParams(*params);
+    params_copy->prompt = strdup(params->prompt);
+
+    // Run generation on a background thread so the Dart UI thread stays responsive
+    std::thread worker([llamafu, params_copy]() {
+        const std::string prompt_str(params_copy->prompt);
+
+        auto push_token = [llamafu](const std::string& token) {
+            std::lock_guard<std::mutex> lock(llamafu->stream_state.mtx);
+            llamafu->stream_state.tokens.push(token);
+        };
+
+        try {
+            const llama_vocab* vocab = llama_model_get_vocab(llamafu->model);
+            const int32_t text_len = static_cast<int32_t>(prompt_str.length());
+            const int32_t n_tokens_max = text_len + 16;
+            std::vector<llama_token> tokens(n_tokens_max);
+
+            const int32_t n_tokens = llama_tokenize(vocab, prompt_str.c_str(), text_len, tokens.data(), n_tokens_max, true, true);
+            if (n_tokens < 0) {
+                llamafu->stream_state.error = true;
+                llamafu->stream_state.completed = true;
+                delete params_copy;
+                free((void*)params_copy->prompt);
+                return;
+            }
+            tokens.resize(n_tokens);
+
+            if (tokens.empty()) {
+                llamafu->stream_state.error = true;
+                llamafu->stream_state.completed = true;
+                delete params_copy;
+                free((void*)params_copy->prompt);
+                return;
+            }
+
+            llama_memory_clear(llama_get_memory(llamafu->ctx), false);
+
+            if (llama_decode(llamafu->ctx, llama_batch_get_one(tokens.data(), tokens.size())) != 0) {
+                llamafu->stream_state.error = true;
+                llamafu->stream_state.completed = true;
+                delete params_copy;
+                free((void*)params_copy->prompt);
+                return;
+            }
+
+            float temperature = params_copy->temperature > 0.0f ? params_copy->temperature : 0.8f;
+            int32_t top_k = params_copy->top_k > 0 ? params_copy->top_k : 40;
+            float top_p = params_copy->top_p > 0.0f ? params_copy->top_p : 0.95f;
+            float repeat_penalty = params_copy->repeat_penalty > 0.0f ? params_copy->repeat_penalty : 1.1f;
+            uint32_t seed = params_copy->seed > 0 ? params_copy->seed : 42;
+
+            llama_sampler* smpl = build_sampler_chain(temperature, top_k, top_p, repeat_penalty, seed);
+            if (!smpl) {
+                llamafu->stream_state.error = true;
+                llamafu->stream_state.completed = true;
+                delete params_copy;
+                free((void*)params_copy->prompt);
+                return;
+            }
+
+            const int32_t max_tokens = params_copy->max_tokens > 0 ? params_copy->max_tokens : 256;
+            int32_t n_cur = static_cast<int32_t>(tokens.size());
+            const int32_t n_ctx = llama_n_ctx(llamafu->ctx);
+
+            for (int32_t i = 0; i < max_tokens; i++) {
+                if (llamafu->abort_callback && llamafu->abort_callback(llamafu->abort_callback_data)) {
+                    break;
+                }
+
+                llama_token new_token = llama_sampler_sample(smpl, llamafu->ctx, -1);
+
+                if (llama_vocab_is_eog(vocab, new_token)) {
+                    break;
+                }
+
+                char piece[256] = {0};
+                int32_t n = llama_token_to_piece(vocab, new_token, piece, sizeof(piece) - 1, 0, true);
+                if (n < 0) {
+                    n = 0;
+                }
+                piece[n] = '\0';
+
+                push_token(std::string(piece, n));
+
+                llama_sampler_accept(smpl, new_token);
+
+                if (n_cur >= n_ctx - 1) {
+                    break;
+                }
+
+                if (llama_decode(llamafu->ctx, llama_batch_get_one(&new_token, 1)) != 0) {
+                    break;
+                }
+
+                n_cur++;
+            }
+
+            llama_sampler_free(smpl);
+        } catch (const std::exception& e) {
+            llamafu->stream_state.error = true;
+        }
+
+        llamafu->stream_state.completed = true;
+        delete params_copy;
+        free((void*)params_copy->prompt);
+    });
+
+    worker.detach();
+
+    return LLAMAFU_SUCCESS;
+}
+
+LlamafuError llamafu_read_stream_token(
+    Llamafu llamafu,
+    char** out_token,
+    bool* out_completed
+) {
+    if (!llamafu || !out_token || !out_completed) {
+        return LLAMAFU_ERROR_INVALID_PARAM;
+    }
+
+    *out_token = nullptr;
+    *out_completed = llamafu->stream_state.completed.load();
+
+    std::lock_guard<std::mutex> lock(llamafu->stream_state.mtx);
+    if (!llamafu->stream_state.tokens.empty()) {
+        const std::string& token = llamafu->stream_state.tokens.front();
+        *out_token = static_cast<char*>(malloc(token.length() + 1));
+        if (*out_token) {
+            memcpy(*out_token, token.data(), token.length());
+            (*out_token)[token.length()] = '\0';
+        }
+        llamafu->stream_state.tokens.pop();
+        return LLAMAFU_SUCCESS;
+    }
+
+    return llamafu->stream_state.completed.load() ? LLAMAFU_ERROR_ABORTED : LLAMAFU_ERROR_UNKNOWN;
 }
 
 LlamafuError llamafu_complete_with_grammar_stream(

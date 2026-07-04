@@ -1,21 +1,22 @@
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:llamafu/llamafu.dart';
 
 void main() {
   group('Llamafu', () {
-    test('Can be imported', () {
-      // This test just verifies that the package can be imported without errors
+    test('Llamafu class exists', () {
       expect(Llamafu, isNotNull);
     });
-    
-    test('MediaInput can be created', () {
-      final mediaInput = MediaInput(
-        type: MediaType.image,
-        data: '/path/to/image.jpg',
-      );
-      
-      expect(mediaInput.type, equals(MediaType.image));
-      expect(mediaInput.data, equals('/path/to/image.jpg'));
+
+    test('Llamafu.init is callable', () {
+      expect(Llamafu.init, isNotNull);
+    });
+
+    test('maxTokens default is defined', () {
+      expect(Llamafu.maxTokens, equals(8192));
+    });
+
+    test('maxPromptLength default is defined', () {
+      expect(Llamafu.maxPromptLength, equals(100000));
     });
   });
 }

@@ -716,6 +716,18 @@ LlamafuError llamafu_complete_stream(
     void* user_data
 );
 
+// Poll the stream for the next token.
+// Returns LLAMAFU_SUCCESS and allocates *out_token if a token is available.
+// Returns LLAMAFU_ERROR_ABORTED when the stream has completed (no more tokens).
+// Returns LLAMAFU_ERROR_UNKNOWN if the stream is still generating (no token yet).
+// *out_completed is set to true when generation is fully done.
+// The caller must free *out_token with llamafu_free_string.
+LlamafuError llamafu_read_stream_token(
+    Llamafu llamafu,
+    char** out_token,
+    bool* out_completed
+);
+
 LlamafuError llamafu_multimodal_complete(
     Llamafu llamafu,
     LlamafuMultimodalInferParams* params,

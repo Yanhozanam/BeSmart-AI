@@ -249,7 +249,22 @@ class _ChatScreenState extends State<ChatScreen> {
                     if (index < messages.length) {
                       return MessageBubble(message: messages[index]);
                     }
-                    return const TypingIndicator();
+                    return Column(
+                      children: [
+                        const TypingIndicator(),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 56, top: 4, bottom: 4),
+                          child: Text(
+                            'BeSmartAI is thinking... (this may take 30-60 seconds)',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.4),
+                              fontSize: 12,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
                   },
                 );
               },
@@ -285,46 +300,55 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildInputBar() {
-    return Container(
-      color: const Color(0xFF1F2C33),
-      padding: EdgeInsets.only(
-        left: 12,
-        right: 8,
-        top: 8,
-        bottom: MediaQuery.of(context).padding.bottom + 8,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFF2A3942),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: TextField(
-                controller: _controller,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _onSend(),
-                decoration: InputDecoration(
-                  hintText: 'Ask anything...',
-                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
+    return Consumer<ChatProvider>(
+      builder: (context, provider, _) {
+        final isLoading = provider.state == ChatState.loading;
+        return Container(
+          color: const Color(0xFF1F2C33),
+          padding: EdgeInsets.only(
+            left: 12,
+            right: 8,
+            top: 8,
+            bottom: MediaQuery.of(context).padding.bottom + 8,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2A3942),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: TextField(
+                    controller: _controller,
+                    enabled: !isLoading,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _onSend(),
+                    decoration: InputDecoration(
+                      hintText: isLoading ? 'BeSmartAI is thinking...' : 'Ask anything...',
+                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                    ),
+                    style: const TextStyle(color: Colors.white),
                   ),
                 ),
-                style: const TextStyle(color: Colors.white),
               ),
-            ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: Icon(
+                  Icons.send,
+                  color: isLoading ? Colors.white24 : const Color(0xFF00A884),
+                ),
+                onPressed: isLoading ? null : _onSend,
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.send, color: Color(0xFF00A884)),
-            onPressed: _onSend,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
