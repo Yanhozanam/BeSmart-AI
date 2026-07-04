@@ -27,6 +27,10 @@ jobs:
           channel: "stable"
           cache: true
 
+      - name: Install Android NDK 28.2.13676358
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "ndk;28.2.13676358"
+
       - name: Accept Android licenses
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses
@@ -34,143 +38,36 @@ jobs:
       - name: Get Flutter packages
         run: flutter pub get
 
-      - name: Find pub cache and clone llama.cpp
+      - name: Clone llama.cpp (pinned commit)
         run: |
-          PUB_CACHE_DIR="${PUB_CACHE:-$HOME/.pub-cache}"
-          LLAMAFU_DIR=$(find "$PUB_CACHE_DIR" -type d -name "llamafu-*" 2>/dev/null | head -1)
-          echo "llamafu found at: $LLAMAFU_DIR"
-          if [ -n "$LLAMAFU_DIR" ]; then
-            CPP_DIR="$(dirname "$(dirname "$LLAMAFU_DIR")")/llama.cpp"
-          else
-            CPP_DIR="$PUB_CACHE_DIR/hosted/pub.dev/llama.cpp"
-          fi
           LLAMA_COMMIT="b96b82fc852b83ea6f58ffcdc264308f60f79211"
-          echo "Cloning llama.cpp (pinned to $LLAMA_COMMIT) to: $CPP_DIR"
-          git init "$CPP_DIR"
-          cd "$CPP_DIR"
-          git remote add origin https://github.com/ggml-org/llama.cpp 2>/dev/null || git remote set-url origin https://github.com/ggml-org/llama.cpp
+          echo "Cloning llama.cpp (pinned to $LLAMA_COMMIT) to project root..."
+          git clone --depth 1 https://github.com/ggml-org/llama.cpp llama.cpp
+          cd llama.cpp
           git fetch --depth 1 origin "$LLAMA_COMMIT"
           git checkout FETCH_HEAD
           cd -
-          echo "LLAMA_CPP_DIR=$CPP_DIR" >> $GITHUB_ENV
+          echo "LLAMA_CPP_DIR=$(pwd)/llama.cpp" >> $GITHUB_ENV
 
-      - name: Patch llamafu for AGP 8.11 + NDK 27 compatibility
+      - name: Patch llama-mmap.cpp for NDK compatibility
         run: |
-          LLAMAFU_BUILD="$HOME/.pub-cache/hosted/pub.dev/llamafu-0.1.0/android/build.gradle"
-          if [ ! -f "$LLAMAFU_BUILD" ]; then
-            LLAMAFU_BUILD=$(find "$HOME/.pub-cache" -name "build.gradle" -path "*/llamafu*/android/*" 2>/dev/null | head -1)
-          fi
-          echo "Patching build.gradle: $LLAMAFU_BUILD"
-
-          # Overwrite with AGP 8.11 compatible build.gradle
-          cat > "$LLAMAFU_BUILD" << 'EOF'
-          plugins {
-              id "com.android.library"
-              id "kotlin-android"
-          }
-
-          android {
-              namespace "com.example.llamafu"
-              compileSdk 36
-
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-
-              kotlinOptions {
-                  jvmTarget = '17'
-              }
-
-              sourceSets {
-                  main.java.srcDirs += "src/main/kotlin"
-              }
-
-              defaultConfig {
-                  minSdk 21
-                  targetSdk 36
-
-                  externalNativeBuild {
-                      cmake {
-                          def llamaCppDir = System.getenv("LLAMA_CPP_DIR") ?: project.findProperty("llama.cpp.dir") ?: "${projectDir}/../../../llama.cpp"
-                          arguments "-DLLAMA_CPP_DIR=${llamaCppDir}"
-                          cppFlags "-O3", "-DNDEBUG"
-                      }
-                  }
-              }
-
-              externalNativeBuild {
-                  cmake {
-                      path "src/main/cpp/CMakeLists.txt"
-                      version "3.22.1"
-                  }
-              }
-
-              buildTypes {
-                  release {
-                      signingConfig signingConfigs.debug
-                  }
-              }
-          }
-
-          dependencies {
-              implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-          }
-          EOF
-
-          # Patch llamafu's CMakeLists.txt: disable GGML_STATIC, disable common (avoids server-context),
-          # disable tools, add mtmd sources directly to the target
-          LLAMAFU_CMAKE="$(dirname "$LLAMAFU_BUILD")/src/main/cpp/CMakeLists.txt"
-          echo "Patching CMakeLists.txt at: $LLAMAFU_CMAKE"
-          sed -i 's/set(GGML_STATIC ON)/set(GGML_STATIC OFF)/' "$LLAMAFU_CMAKE"
-          sed -i '/^set(LLAMA_BUILD_EXAMPLES OFF)/a set(LLAMA_CURL OFF)' "$LLAMAFU_CMAKE"
-          sed -i '/^set(LLAMA_BUILD_EXAMPLES OFF)/a set(LLAMA_BUILD_TOOLS OFF)' "$LLAMAFU_CMAKE"
-          sed -i '/^set(LLAMA_BUILD_EXAMPLES OFF)/a set(LLAMA_BUILD_COMMON OFF)' "$LLAMAFU_CMAKE"
-          sed -i '/^set(LLAMA_BUILD_EXAMPLES OFF)/a set(GGML_LLAMAFILE OFF)' "$LLAMAFU_CMAKE"
-          # Add vendor include path for miniaudio.h (needed by mtmd-helper.cpp)
-          sed -i '/${LLAMA_CPP_DIR}\/tools\/mtmd/a\    ${LLAMA_CPP_DIR}\/vendor' "$LLAMAFU_CMAKE"
-          # Remove any add_subdirectory or mtmd linker references from previous approaches
-          sed -i '/add_subdirectory.*mtmd/d' "$LLAMAFU_CMAKE"
-          sed -i '/^        mtmd$/d' "$LLAMAFU_CMAKE"
-
-          # Patch llama-mmap.cpp for NDK 27: posix_madvise -> madvise
           LLAMA_MMAP="$LLAMA_CPP_DIR/src/llama-mmap.cpp"
-          echo "Patching llama-mmap.cpp at: $LLAMA_MMAP"
-          sed -i 's/posix_madvise/madvise/g; s/POSIX_MADV_WILLNEED/MADV_WILLNEED/g; s/POSIX_MADV_RANDOM/MADV_RANDOM/g' "$LLAMA_MMAP"
+          if [ -f "$LLAMA_MMAP" ]; then
+            echo "Patching llama-mmap.cpp: posix_madvise -> madvise"
+            sed -i 's/posix_madvise/madvise/g; s/POSIX_MADV_WILLNEED/MADV_WILLNEED/g; s/POSIX_MADV_RANDOM/MADV_RANDOM/g' "$LLAMA_MMAP"
+          fi
 
-          # Add mtmd sources directly to the llamafu target (same approach as the root CMakeLists.txt)
-          # This avoids needing mtmd's own CMakeLists.txt which has dependency issues in subdirectory builds
-          cat >> "$LLAMAFU_CMAKE" << 'CMAKEOF'
-          # Multimodal support source files from llama.cpp/tools/mtmd
-          target_sources(llamafu PRIVATE
-              ${LLAMA_CPP_DIR}/tools/mtmd/clip.cpp
-              ${LLAMA_CPP_DIR}/tools/mtmd/mtmd.cpp
-              ${LLAMA_CPP_DIR}/tools/mtmd/mtmd-audio.cpp
-              ${LLAMA_CPP_DIR}/tools/mtmd/mtmd-helper.cpp
-              ${LLAMA_CPP_DIR}/tools/mtmd/models/cogvlm.cpp
-              ${LLAMA_CPP_DIR}/tools/mtmd/models/conformer.cpp
-              ${LLAMA_CPP_DIR}/tools/mtmd/models/glm4v.cpp
-              ${LLAMA_CPP_DIR}/tools/mtmd/models/internvl.cpp
-              ${LLAMA_CPP_DIR}/tools/mtmd/models/kimivl.cpp
-              ${LLAMA_CPP_DIR}/tools/mtmd/models/llama4.cpp
-              ${LLAMA_CPP_DIR}/tools/mtmd/models/llava.cpp
-              ${LLAMA_CPP_DIR}/tools/mtmd/models/minicpmv.cpp
-              ${LLAMA_CPP_DIR}/tools/mtmd/models/pixtral.cpp
-              ${LLAMA_CPP_DIR}/tools/mtmd/models/qwen2vl.cpp
-              ${LLAMA_CPP_DIR}/tools/mtmd/models/qwen3vl.cpp
-              ${LLAMA_CPP_DIR}/tools/mtmd/models/siglip.cpp
-              ${LLAMA_CPP_DIR}/tools/mtmd/models/whisper-enc.cpp
-          )
-          CMAKEOF
-
-      - name: Fix Gradle JVM heap for R8 (OOM with mtmd sources)
+      - name: Fix Gradle JVM heap
         run: |
-          sed -i 's/org.gradle.jvmargs=-Xmx[0-9]*m -XX:MaxMetaspaceSize=[0-9]*m/org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g/' android/gradle.properties
+          sed -i 's/org.gradle.jvmargs=-Xmx[0-9]*m/org.gradle.jvmargs=-Xmx4g/' android/gradle.properties
 
-      - name: Build APK
-        run: flutter build apk --release
+      - name: Build release APK (arm64)
+        run: flutter build apk --release --target-platform android-arm64
 
-      - name: Upload APK
+      - name: Build release APK (x86_64 for emulator)
+        run: flutter build apk --release --target-platform android-x64
+
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
           name: besmartai-apk
