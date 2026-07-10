@@ -6,6 +6,7 @@ import '../providers/chat_provider.dart';
 import '../providers/model_provider.dart';
 import '../services/model_service.dart';
 import '../services/storage_service.dart';
+import '../theme/app_colors.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -29,11 +30,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Settings'),
-        backgroundColor: const Color(0xFF1F2C33),
+        backgroundColor: AppColors.surface,
+        elevation: 0,
+        title: const Text(
+          'Settings',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
       ),
-      backgroundColor: const Color(0xFF111B21),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -84,13 +89,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   onPressed: _onClearChat,
-                  icon: const Icon(Icons.delete, color: Colors.redAccent),
+                  icon: const Icon(Icons.delete, color: AppColors.errorText),
                   label: const Text(
                     'Clear Chat',
-                    style: TextStyle(color: Colors.redAccent),
+                    style: TextStyle(color: AppColors.errorText),
                   ),
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.redAccent),
+                    side: const BorderSide(color: AppColors.errorText),
                   ),
                 ),
               ),
@@ -117,8 +122,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 2),
                     child: Text(
                       '${e.key}: ${e.value}',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.6),
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
                         fontSize: 12,
                         fontFamily: 'monospace',
                       ),
@@ -129,11 +134,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 32),
-          Center(
+          const Center(
             child: Text(
               'BeSmartAI v1.0.0',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.4),
+                color: AppColors.textSecondary,
                 fontSize: 13,
               ),
             ),
@@ -150,14 +155,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              const Icon(Icons.error, color: Colors.redAccent, size: 20),
-              const SizedBox(width: 8),
+              Icon(Icons.error, color: AppColors.errorText, size: 20),
+              SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Download failed',
-                  style: TextStyle(color: Colors.redAccent.withOpacity(0.9), fontSize: 15),
+                  style: TextStyle(
+                    color: AppColors.errorText,
+                    fontSize: 15,
+                  ),
                 ),
               ),
             ],
@@ -167,13 +175,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: () => provider.download(),
-              icon: const Icon(Icons.refresh, color: Color(0xFF00A884)),
+              icon: const Icon(Icons.refresh, color: AppColors.primary),
               label: const Text(
                 'Retry',
-                style: TextStyle(color: Color(0xFF00A884)),
+                style: TextStyle(color: AppColors.primary),
               ),
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFF00A884)),
+                side: const BorderSide(color: AppColors.primary),
               ),
             ),
           ),
@@ -189,14 +197,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             Icon(
               isReady ? Icons.check_circle : Icons.cloud_download,
-              color: isReady ? Colors.green : Colors.white54,
+              color: isReady ? AppColors.primary : AppColors.textSecondary,
               size: 20,
             ),
             const SizedBox(width: 8),
             Text(
               isReady ? '${model.label} ready' : '${model.label} not downloaded',
               style: TextStyle(
-                color: isReady ? Colors.green : Colors.white70,
+                color: isReady ? AppColors.primary : AppColors.textSecondary,
                 fontSize: 15,
               ),
             ),
@@ -208,13 +216,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: isReady
               ? OutlinedButton.icon(
                   onPressed: () => _onDeleteModel(provider),
-                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                  icon: const Icon(Icons.delete_outline, color: AppColors.errorText),
                   label: const Text(
                     'Delete Model',
-                    style: TextStyle(color: Colors.redAccent),
+                    style: TextStyle(color: AppColors.errorText),
                   ),
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.redAccent),
+                    side: const BorderSide(color: AppColors.errorText),
                   ),
                 )
               : FilledButton.icon(
@@ -222,7 +230,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: const Icon(Icons.download),
                   label: const Text('Download Model'),
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF00A884),
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.background,
                   ),
                 ),
         ),
@@ -234,23 +243,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1F2C33),
-        title: const Text('Delete Model', style: TextStyle(color: Colors.white)),
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Model', style: TextStyle(color: AppColors.textPrimary)),
         content: const Text(
           'Remove downloaded model? App will use mock responses until redownloaded.',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: AppColors.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
           ),
           TextButton(
             onPressed: () {
               provider.deleteModel();
               Navigator.pop(ctx);
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
+            child: const Text('Delete', style: TextStyle(color: AppColors.errorText)),
           ),
         ],
       ),
@@ -264,7 +274,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Widget content,
   ) {
     return Card(
-      color: const Color(0xFF1F2C33),
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 0,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -272,14 +284,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             Row(
               children: [
-                Icon(icon, size: 20, color: const Color(0xFF00A884)),
+                Icon(icon, size: 20, color: AppColors.primary),
                 const SizedBox(width: 8),
                 Text(
                   title,
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                   ),
                 ),
               ],
@@ -296,20 +308,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final selected = _language == value;
     return InkWell(
       onTap: () => _onLanguageChanged(value),
+      borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(
           children: [
             Icon(
               selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-              color: selected ? const Color(0xFF00A884) : Colors.white54,
+              color: selected ? AppColors.primary : AppColors.textSecondary,
               size: 20,
             ),
             const SizedBox(width: 12),
             Text(
               label,
               style: TextStyle(
-                color: selected ? Colors.white : Colors.white70,
+                color: selected ? AppColors.textPrimary : AppColors.textSecondary,
                 fontSize: 15,
               ),
             ),
@@ -323,20 +336,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final selected = _modelTier == value;
     return InkWell(
       onTap: () => _onModelTierChanged(value),
+      borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(
           children: [
             Icon(
               selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-              color: selected ? const Color(0xFF00A884) : Colors.white54,
+              color: selected ? AppColors.primary : AppColors.textSecondary,
               size: 20,
             ),
             const SizedBox(width: 12),
             Text(
               label,
               style: TextStyle(
-                color: selected ? Colors.white : Colors.white70,
+                color: selected ? AppColors.textPrimary : AppColors.textSecondary,
                 fontSize: 15,
               ),
             ),
@@ -375,23 +389,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1F2C33),
-        title: const Text('Clear Chat', style: TextStyle(color: Colors.white)),
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Clear Chat', style: TextStyle(color: AppColors.textPrimary)),
         content: const Text(
           'Delete all messages? This cannot be undone.',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: AppColors.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
           ),
           TextButton(
             onPressed: () {
               context.read<ChatProvider>().clearChat();
               Navigator.pop(ctx);
             },
-            child: const Text('Clear', style: TextStyle(color: Colors.redAccent)),
+            child: const Text('Clear', style: TextStyle(color: AppColors.errorText)),
           ),
         ],
       ),

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import '../services/device_info.dart';
+import '../services/model_manager.dart';
 import '../services/storage_service.dart';
+import '../theme/app_colors.dart';
 import 'chat_screen.dart';
+import 'download_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -45,6 +48,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
@@ -52,38 +56,47 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Spacer(flex: 2),
-              Icon(
+              const Icon(
                 Icons.auto_awesome,
                 size: 80,
-                color: Theme.of(context).colorScheme.primary,
+                color: AppColors.primary,
               ),
               const SizedBox(height: 16),
-              Text(
+              const Text(
                 'BeSmartAI',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                style: TextStyle(
+                  fontSize: 32,
                   fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
                 ),
               ),
               const SizedBox(height: 8),
-              Text(
+              const Text(
                 'Your offline study companion',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: AppColors.textSecondary,
                 ),
               ),
               const Spacer(flex: 1),
               Card(
+                color: AppColors.surface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      const Text(
                         'Device Compatibility Check',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        style: TextStyle(
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -114,12 +127,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
               ),
               if (!_storageSufficient)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
                   child: Text(
                     'Low storage detected. Only Lite mode available.',
                     style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
+                      color: AppColors.errorText,
                       fontSize: 13,
                     ),
                     textAlign: TextAlign.center,
@@ -129,7 +142,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               FilledButton(
                 onPressed: _onContinue,
                 style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.background,
                   padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 child: const Text('Continue'),
               ),
@@ -147,17 +165,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         Icon(
           ok ? Icons.check_circle : Icons.warning,
           size: 20,
-          color: ok ? Colors.green : Colors.orange,
+          color: ok ? AppColors.primary : AppColors.warningText,
         ),
         const SizedBox(width: 12),
         Text(
           '$label: ',
-          style: Theme.of(context).textTheme.bodyMedium,
+          style: const TextStyle(
+            fontSize: 15,
+            color: AppColors.textPrimary,
+          ),
         ),
         Text(
           value,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          style: const TextStyle(
+            fontSize: 15,
             fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
           ),
         ),
       ],
@@ -170,8 +193,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     await storage.setModelTier(_recommendedModel);
 
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const ChatScreen()),
-    );
+
+    final modelReady = ModelManager().isReady;
+    if (modelReady) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const ChatScreen()),
+      );
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const DownloadScreen()),
+      );
+    }
   }
 }

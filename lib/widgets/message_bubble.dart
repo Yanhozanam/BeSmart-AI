@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/message.dart';
+import '../theme/app_colors.dart';
 
 class MessageBubble extends StatelessWidget {
   final Message message;
@@ -27,26 +28,27 @@ class MessageBubble extends StatelessWidget {
           Flexible(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-              decoration: const BoxDecoration(
-                color: Color(0xFF075E54),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  topRight: Radius.circular(20),
-                  bottomLeft: Radius.circular(20),
-                  bottomRight: Radius.circular(4),
-                ),
+              decoration: BoxDecoration(
+                color: AppColors.userBubble,
+                borderRadius: BorderRadius.circular(20),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     message.content,
-                    style: const TextStyle(color: Colors.white, fontSize: 15.0),
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 15.0,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     _formatTime(message.timestamp),
-                    style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11.0),
+                    style: TextStyle(
+                      color: AppColors.textSecondary.withOpacity(0.6),
+                      fontSize: 11.0,
+                    ),
                     textAlign: TextAlign.right,
                   ),
                 ],
@@ -79,7 +81,7 @@ class MessageBubble extends StatelessWidget {
                   const Text(
                     'BeSmartAI',
                     style: TextStyle(
-                      color: Color(0xFF00A884),
+                      color: AppColors.primary,
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
@@ -88,7 +90,7 @@ class MessageBubble extends StatelessWidget {
                   Text(
                     displayText,
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: AppColors.textPrimary,
                       fontSize: 16.0,
                       height: 1.5,
                     ),
@@ -99,7 +101,7 @@ class MessageBubble extends StatelessWidget {
                       Text(
                         _formatTime(message.timestamp),
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.4),
+                          color: AppColors.textSecondary.withOpacity(0.5),
                           fontSize: 11.0,
                         ),
                       ),
@@ -110,7 +112,7 @@ class MessageBubble extends StatelessWidget {
                           child: Icon(
                             Icons.copy_rounded,
                             size: 14,
-                            color: Colors.white.withOpacity(0.4),
+                            color: AppColors.textSecondary.withOpacity(0.5),
                           ),
                         ),
                       ],
@@ -128,10 +130,11 @@ class MessageBubble extends StatelessWidget {
   void _copyToClipboard(BuildContext context) {
     Clipboard.setData(ClipboardData(text: message.content));
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Copied to clipboard'),
-        duration: Duration(seconds: 1),
-        backgroundColor: Color(0xFF1F2C33),
+      SnackBar(
+        content: const Text('Copied to clipboard'),
+        duration: const Duration(seconds: 1),
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
   }
@@ -139,11 +142,11 @@ class MessageBubble extends StatelessWidget {
   Widget _buildAvatar(bool isUser) {
     return CircleAvatar(
       radius: 16,
-      backgroundColor: isUser ? const Color(0xFF128C7E) : const Color(0xFF00A884),
+      backgroundColor: isUser ? AppColors.userAvatarBg : AppColors.primary,
       child: Icon(
         isUser ? Icons.person : Icons.auto_awesome,
         size: 18,
-        color: Colors.white,
+        color: isUser ? Colors.white : AppColors.background,
       ),
     );
   }

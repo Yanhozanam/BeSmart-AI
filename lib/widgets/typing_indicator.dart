@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
 
 class TypingIndicator extends StatefulWidget {
   const TypingIndicator({super.key});
@@ -42,8 +43,8 @@ class _TypingIndicatorState extends State<TypingIndicator> {
         children: [
           const CircleAvatar(
             radius: 16,
-            backgroundColor: Color(0xFF00A884),
-            child: Icon(Icons.auto_awesome, size: 18, color: Colors.white),
+            backgroundColor: AppColors.primary,
+            child: Icon(Icons.auto_awesome, size: 18, color: AppColors.background),
           ),
           const SizedBox(width: 8),
           Container(
@@ -51,14 +52,9 @@ class _TypingIndicatorState extends State<TypingIndicator> {
               horizontal: 16.0,
               vertical: 12.0,
             ),
-            decoration: const BoxDecoration(
-              color: Color(0xFF262D31),
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-                bottomLeft: Radius.circular(4),
-                bottomRight: Radius.circular(20),
-              ),
+            decoration: BoxDecoration(
+              color: AppColors.typingIndicatorBubble,
+              borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -73,7 +69,7 @@ class _TypingIndicatorState extends State<TypingIndicator> {
                       width: 8,
                       height: 8,
                       decoration: const BoxDecoration(
-                        color: Colors.white,
+                        color: AppColors.primary,
                         shape: BoxShape.circle,
                       ),
                     ),

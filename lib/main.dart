@@ -7,6 +7,8 @@ import 'services/model_manager.dart';
 import 'services/storage_service.dart';
 import 'screens/chat_screen.dart';
 import 'screens/download_screen.dart';
+import 'screens/onboarding_screen.dart';
+import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,12 +36,7 @@ class BeSmartAIApp extends StatelessWidget {
       child: MaterialApp(
         title: 'BeSmartAI',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          brightness: Brightness.dark,
-          colorSchemeSeed: const Color(0xFF00A884),
-          scaffoldBackgroundColor: const Color(0xFF111B21),
-        ),
+        theme: buildAppTheme(),
         home: const _AppEntry(),
       ),
     );
@@ -51,6 +48,13 @@ class _AppEntry extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final storage = StorageService();
+    final onboardingDone = storage.getOnboardingDone();
+
+    if (!onboardingDone) {
+      return const OnboardingScreen();
+    }
+
     final modelReady = ModelManager().isReady;
     if (modelReady) {
       return const ChatScreen();
