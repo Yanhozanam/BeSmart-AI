@@ -5,6 +5,8 @@ import '../config/model_config.dart';
 import '../providers/chat_provider.dart';
 import '../providers/model_provider.dart';
 import '../services/model_service.dart';
+import '../services/device_info.dart';
+import '../services/model_manager.dart' hide ModelStatus;
 import '../services/storage_service.dart';
 import '../theme/app_colors.dart';
 
@@ -424,7 +426,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final tierName = tier == ModelTier.lite ? 'Lite' : 'Standard';
     final currentName = currentTier == ModelTier.lite ? 'Lite' : 'Standard';
 
-    if (tier == ModelTier.standard && !_hasEnoughResources()) {
+    if (tier == ModelTier.standard && !(await _hasEnoughResources())) {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -483,6 +485,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (confirmed != true) return;
 
+    await ModelManager().deleteModel(currentTier);
+
     setState(() => _selectedTier = tier);
     await _storage.setModelTier(tier);
 
@@ -491,8 +495,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  bool _hasEnoughResources() {
-    return true;
+  Future<bool> _hasEnoughResources() async {
+    final info = await DeviceInfo.detect();
+    return info.ramMB >= 4096 && info.freeStorageMB >= 5000;
   }
 
   Future<Map<String, String>> _getDebugInfo(ModelTier tier) async {

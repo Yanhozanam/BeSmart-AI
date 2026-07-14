@@ -7,6 +7,7 @@ import '../services/model_manager.dart';
 import '../services/storage_service.dart';
 import '../services/llm_service.dart';
 import '../utils/debug_logger.dart';
+import '../services/model_service.dart';
 
 enum ChatState { idle, loading }
 
@@ -22,6 +23,7 @@ class ChatProvider extends ChangeNotifier {
   ChatState _state = ChatState.idle;
   int _promptLogCount = 0;
   final int _maxPromptLogs = 3;
+  StreamSubscription<String>? _generationSubscription;
 
   List<Message> get messages => _messages;
   ChatState get state => _state;
@@ -75,51 +77,7 @@ class ChatProvider extends ChangeNotifier {
 
       final prompt = _buildPrompt(input, _messages);
 
-      final aiMsg = Message(
-        id: _nextId(),
-        content: '',
-        isUser: false,
-        timestamp: DateTime.now(),
-        isStreaming: true,
-      );
-      _messages.add(aiMsg);
-      _state = ChatState.idle;
-      notifyListeners();
-
-      final buffer = StringBuffer();
-
-      final stream = _modelManager.generateStream(prompt);
-      final timeoutStream = stream.timeout(
-        const Duration(seconds: 120),
-        onTimeout: (sink) {
-          sink.addError(TimeoutException('Inference timed out'));
-          sink.close();
-        },
-      );
-
-      await for (final token in timeoutStream) {
-        buffer.write(token);
-        _messages[_messages.length - 1] = Message(
-          id: aiMsg.id,
-          content: buffer.toString(),
-          isUser: false,
-          timestamp: DateTime.now(),
-          isStreaming: true,
-        );
-        notifyListeners();
-      }
-
-      final fullResponse = buffer.toString();
-      final sanitized = sanitizeGemmaHistory(fullResponse);
-      _messages[_messages.length - 1] = Message(
-        id: aiMsg.id,
-        content: sanitized,
-        isUser: false,
-        timestamp: DateTime.now(),
-        isStreaming: false,
-      );
-      await _storage.addMessage(_messages.last);
-      notifyListeners();
+      await _streamResponse(prompt);
     } catch (e) {
       debugPrint('[ChatProvider] Error: $e');
       _state = ChatState.idle;
@@ -130,6 +88,10 @@ class ChatProvider extends ChangeNotifier {
         errMsg = lang == 'fr'
             ? "Cela prend plus de temps que prévu. Essayez une question plus courte."
             : 'This is taking longer than expected. Try a shorter question.';
+      } else if (e is ArgumentError) {
+        errMsg = lang == 'fr'
+            ? "Erreur interne du modèle. Essayez une question différente."
+            : "Internal model error. Try a different question.";
       } else {
         errMsg = lang == 'fr'
             ? "Désolé, quelque chose s'est mal passé. Veuillez réessayer."
@@ -154,13 +116,23 @@ class ChatProvider extends ChangeNotifier {
   }
 
   String _buildPrompt(String userMessage, List<Message> history) {
+    final isLite = _modelManager.info.tier == ModelTier.lite;
     final buffer = StringBuffer();
-    buffer.writeln('<bos>');
-    buffer.writeln('<|turn>system');
-    buffer.writeln('${ModelConfig.systemPrompt}<turn|>');
-    buffer.writeln('<|turn>user');
-    buffer.writeln('$userMessage<turn|>');
-    buffer.writeln('<|turn>model');
+
+    if (isLite) {
+      buffer.writeln('<|im_start|>system');
+      buffer.writeln('${ModelConfig.systemPrompt}<|im_end|>');
+      buffer.writeln('<|im_start|>user');
+      buffer.writeln('$userMessage<|im_end|>');
+      buffer.writeln('<|im_start|>assistant');
+    } else {
+      buffer.writeln('<bos>');
+      buffer.writeln('<|turn>system');
+      buffer.writeln('${ModelConfig.systemPrompt}<turn|>');
+      buffer.writeln('<|turn>user');
+      buffer.writeln('$userMessage<turn|>');
+      buffer.writeln('<|turn>model');
+    }
 
     final prompt = buffer.toString();
     if (_promptLogCount < _maxPromptLogs) {
@@ -202,7 +174,6 @@ class ChatProvider extends ChangeNotifier {
 
   /// Regenerates the last AI response
   Future<void> regenerateLastResponse() async {
-    // Find the last user message
     int lastUserIndex = -1;
     for (int i = _messages.length - 1; i >= 0; i--) {
       if (_messages[i].isUser) {
@@ -214,11 +185,9 @@ class ChatProvider extends ChangeNotifier {
     if (lastUserIndex == -1) return;
 
     final userMessage = _messages[lastUserIndex];
-    
-    // Remove all messages after the last user message
+
     _messages.removeRange(lastUserIndex + 1, _messages.length);
-    
-    // Re-send the message
+
     _state = ChatState.loading;
     notifyListeners();
 
@@ -236,51 +205,7 @@ class ChatProvider extends ChangeNotifier {
 
       final prompt = _buildPrompt(userMessage.content, _messages);
 
-      final aiMsg = Message(
-        id: _nextId(),
-        content: '',
-        isUser: false,
-        timestamp: DateTime.now(),
-        isStreaming: true,
-      );
-      _messages.add(aiMsg);
-      _state = ChatState.idle;
-      notifyListeners();
-
-      final buffer = StringBuffer();
-
-      final stream = _modelManager.generateStream(prompt);
-      final timeoutStream = stream.timeout(
-        const Duration(seconds: 120),
-        onTimeout: (sink) {
-          sink.addError(TimeoutException('Inference timed out'));
-          sink.close();
-        },
-      );
-
-      await for (final token in timeoutStream) {
-        buffer.write(token);
-        _messages[_messages.length - 1] = Message(
-          id: aiMsg.id,
-          content: buffer.toString(),
-          isUser: false,
-          timestamp: DateTime.now(),
-          isStreaming: true,
-        );
-        notifyListeners();
-      }
-
-      final fullResponse = buffer.toString();
-      final sanitized = sanitizeGemmaHistory(fullResponse);
-      _messages[_messages.length - 1] = Message(
-        id: aiMsg.id,
-        content: sanitized,
-        isUser: false,
-        timestamp: DateTime.now(),
-        isStreaming: false,
-      );
-      await _storage.addMessage(_messages.last);
-      notifyListeners();
+      await _streamResponse(prompt);
     } catch (e) {
       debugPrint('[ChatProvider] Regenerate error: $e');
       _state = ChatState.idle;
@@ -291,6 +216,10 @@ class ChatProvider extends ChangeNotifier {
         errMsg = lang == 'fr'
             ? "Cela prend plus de temps que prévu. Essayez une question plus courte."
             : 'This is taking longer than expected. Try a shorter question.';
+      } else if (e is ArgumentError) {
+        errMsg = lang == 'fr'
+            ? "Erreur interne du modèle. Essayez une question différente."
+            : "Internal model error. Try a different question.";
       } else {
         errMsg = lang == 'fr'
             ? "Désolé, quelque chose s'est mal passé. Veuillez réessayer."
@@ -307,11 +236,77 @@ class ChatProvider extends ChangeNotifier {
     // Could persist feedback locally or send to analytics
   }
 
-  /// Cancels the current generation
-  void cancelGeneration() {
-    // The ModelManager's stream will be cancelled when we stop listening
-    // For now, just set state to idle
+  Future<void> _streamResponse(String prompt) async {
+    final aiMsg = Message(
+      id: _nextId(),
+      content: '',
+      isUser: false,
+      timestamp: DateTime.now(),
+      isStreaming: true,
+    );
+    _messages.add(aiMsg);
     _state = ChatState.idle;
     notifyListeners();
+
+    final buffer = StringBuffer();
+    final stream = _modelManager.generateStream(prompt);
+    final timeoutStream = stream.timeout(
+      const Duration(seconds: 120),
+      onTimeout: (sink) {
+        sink.addError(TimeoutException('Inference timed out'));
+        sink.close();
+      },
+    );
+
+    final completer = Completer<void>();
+    _generationSubscription = timeoutStream.listen(
+      (token) {
+        buffer.write(token);
+        _messages[_messages.length - 1] = Message(
+          id: aiMsg.id,
+          content: buffer.toString(),
+          isUser: false,
+          timestamp: DateTime.now(),
+          isStreaming: true,
+        );
+        notifyListeners();
+      },
+      onDone: () {
+        if (!completer.isCompleted) completer.complete();
+      },
+      onError: (e) {
+        if (!completer.isCompleted) completer.completeError(e);
+      },
+      cancelOnError: false,
+    );
+
+    await completer.future;
+    _generationSubscription = null;
+
+    final fullResponse = buffer.toString();
+    final sanitized = sanitizeGemmaHistory(fullResponse);
+    _messages[_messages.length - 1] = Message(
+      id: aiMsg.id,
+      content: sanitized,
+      isUser: false,
+      timestamp: DateTime.now(),
+      isStreaming: false,
+    );
+    await _storage.addMessage(_messages.last);
+    notifyListeners();
+  }
+
+  /// Cancels the current generation
+  void cancelGeneration() {
+    _generationSubscription?.cancel();
+    _generationSubscription = null;
+    _state = ChatState.idle;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _generationSubscription?.cancel();
+    super.dispose();
   }
 }
