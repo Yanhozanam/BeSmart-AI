@@ -1,5 +1,6 @@
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
+import '../config/model_config.dart';
 import '../models/message.dart';
 
 class StorageService {
@@ -51,12 +52,13 @@ class StorageService {
     await _settingsBox.put('language', lang);
   }
 
-  String getModelTier() {
-    return _settingsBox.get('modelTier', defaultValue: 'standard');
+  ModelTier getModelTier() {
+    final tierStr = _settingsBox.get('modelTier', defaultValue: 'standard');
+    return tierStr == 'lite' ? ModelTier.lite : ModelTier.standard;
   }
 
-  Future<void> setModelTier(String tier) async {
-    await _settingsBox.put('modelTier', tier);
+  Future<void> setModelTier(ModelTier tier) async {
+    await _settingsBox.put('modelTier', tier.name);
   }
 
   bool getOnboardingDone() {

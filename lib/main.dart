@@ -9,6 +9,7 @@ import 'screens/chat_screen.dart';
 import 'screens/download_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'theme/app_theme.dart';
+import 'utils/debug_logger.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,6 +18,8 @@ void main() async {
   await storage.init();
 
   await CacheManager().cleanOnStartup();
+
+  await DebugLogger().init();
 
   await ModelManager().initialize();
 

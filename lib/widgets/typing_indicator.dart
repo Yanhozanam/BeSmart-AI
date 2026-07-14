@@ -34,27 +34,30 @@ class _TypingIndicatorState extends State<TypingIndicator> {
     return Padding(
       padding: const EdgeInsets.only(
         left: 16.0,
-        right: 64.0,
-        top: 4.0,
-        bottom: 4.0,
+        right: 16.0,
+        top: 8.0,
+        bottom: 8.0,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          const CircleAvatar(
-            radius: 16,
-            backgroundColor: AppColors.primary,
-            child: Icon(Icons.auto_awesome, size: 18, color: AppColors.background),
-          ),
-          const SizedBox(width: 8),
+          _buildMascotBadge(),
+          const SizedBox(width: 10),
           Container(
             padding: const EdgeInsets.symmetric(
               horizontal: 16.0,
               vertical: 12.0,
             ),
             decoration: BoxDecoration(
-              color: AppColors.typingIndicatorBubble,
-              borderRadius: BorderRadius.circular(20),
+              color: AppColors.surfaceCard,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.cardShadow,
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -79,6 +82,22 @@ class _TypingIndicatorState extends State<TypingIndicator> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMascotBadge() {
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        color: AppColors.mascotBadgeBg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Icon(
+        Icons.menu_book_rounded,
+        size: 16,
+        color: AppColors.mascotBadgeIcon,
       ),
     );
   }

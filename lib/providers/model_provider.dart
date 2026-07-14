@@ -1,10 +1,12 @@
 import 'package:flutter/foundation.dart';
+import '../config/model_config.dart';
 import '../services/model_service.dart';
 
 class ModelProvider extends ChangeNotifier {
   final ModelService _service = ModelService();
 
   ModelInfo get currentModel => _service.currentModel;
+  ModelTier get currentTier => _service.currentTier;
   bool get isReady => _service.currentModel.status == ModelStatus.ready;
 
   ModelProvider() {
@@ -25,12 +27,17 @@ class ModelProvider extends ChangeNotifier {
   }
 
   Future<void> download() async {
-    await _service.tryInitializeModel();
+    await _service.downloadCurrentTier();
     notifyListeners();
   }
 
   Future<void> deleteModel() async {
     await _service.deleteModel();
+    notifyListeners();
+  }
+
+  Future<void> switchTier(ModelTier tier) async {
+    await _service.setTier(tier);
     notifyListeners();
   }
 

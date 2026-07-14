@@ -41,11 +41,13 @@ class MockLLMService implements LLMService {
 class RealLLMService implements LLMService {
   final String modelPath;
   final int contextSize;
+  final ModelTier tier;
   Llamafu? _llamafu;
 
   RealLLMService({
     required this.modelPath,
-    this.contextSize = ModelConfig.contextSize,
+    this.contextSize = 256,
+    this.tier = ModelTier.standard,
   });
 
   @override
@@ -136,7 +138,7 @@ class RealLLMService implements LLMService {
     if (_llamafu == null) throw Exception('Model not initialized');
     return await _llamafu!.complete(
       prompt: prompt,
-      maxTokens: ModelConfig.maxTokens,
+      maxTokens: ModelConfig.maxTokensForTier(tier),
       temperature: ModelConfig.temperature,
     );
   }
@@ -146,7 +148,7 @@ class RealLLMService implements LLMService {
     if (_llamafu == null) throw Exception('Model not initialized');
     yield* _llamafu!.completeStream(
       prompt: prompt,
-      maxTokens: ModelConfig.maxTokens,
+      maxTokens: ModelConfig.maxTokensForTier(tier),
       temperature: ModelConfig.temperature,
     );
   }
@@ -155,4 +157,28 @@ class RealLLMService implements LLMService {
   void dispose() {
     _llamafu?.close();
   }
+}
+
+String sanitizeGemmaResponse(String text) {
+  const startTag = '<|channel>thought';
+  const endTag = '<channel|>';
+  
+  String result = text;
+  int startIndex = 0;
+  while (true) {
+    startIndex = result.indexOf(startTag, startIndex);
+    if (startIndex == -1) break;
+    final endIndex = result.indexOf(endTag, startIndex);
+    if (endIndex == -1) {
+      result = result.substring(0, startIndex);
+      break;
+    }
+    result = result.substring(0, startIndex) + result.substring(endIndex + endTag.length);
+    startIndex = 0;
+  }
+  return result.trim();
+}
+
+String sanitizeGemmaHistory(String text) {
+  return sanitizeGemmaResponse(text);
 }

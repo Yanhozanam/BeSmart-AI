@@ -2,7 +2,11 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../config/model_config.dart';
-import '../services/model_manager.dart';
+import '../providers/model_provider.dart';
+import '../services/model_manager.dart'
+    show ModelManager, ModelStatus, ModelInfo;
+import '../services/model_service.dart'
+    show ModelTier;
 import '../theme/app_colors.dart';
 import 'chat_screen.dart';
 
@@ -16,17 +20,20 @@ class DownloadScreen extends StatefulWidget {
 class _DownloadScreenState extends State<DownloadScreen> {
   double _progress = 0.0;
   int _received = 0;
-  int _total = ModelConfig.expectedSizeBytes;
+  int _total = 0;
   bool _isDownloading = false;
   bool _hasError = false;
   String _errorMessage = '';
   bool _isLoadError = false;
   StreamSubscription<ModelInfo>? _subscription;
+  ModelTier _currentTier = ModelTier.standard;
 
   @override
   void initState() {
     super.initState();
     _subscription = ModelManager().statusStream.listen(_onStatusChange);
+    _currentTier = ModelManager().info.tier;
+    _total = ModelConfig.expectedSizeBytesForTier(_currentTier);
     _checkAndStart();
   }
 
@@ -39,6 +46,8 @@ class _DownloadScreenState extends State<DownloadScreen> {
   void _onStatusChange(ModelInfo info) {
     if (!mounted) return;
     setState(() {
+      _currentTier = info.tier;
+      _total = ModelConfig.expectedSizeBytesForTier(info.tier);
       _progress = info.progress;
       if (info.status == ModelStatus.error) {
         _hasError = true;
@@ -63,14 +72,16 @@ class _DownloadScreenState extends State<DownloadScreen> {
       return;
     }
 
-    final dir = await ModelConfig.modelDirectory;
-    final partialFile = File('$dir/${ModelConfig.fileName}.part');
+    final modelPath = await ModelConfig.modelPathForTier(_currentTier);
+    final partialPath = await ModelConfig.partialModelPathForTier(_currentTier);
+    final modelFile = File(modelPath);
+    final partialFile = File(partialPath);
 
     if (await partialFile.exists()) {
       final partialSize = await partialFile.length();
       setState(() {
         _received = partialSize;
-        _progress = (partialSize / ModelConfig.expectedSizeBytes).clamp(0.0, 1.0);
+        _progress = (partialSize / _total).clamp(0.0, 1.0);
       });
     }
 
@@ -96,6 +107,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
             });
           }
         },
+        tier: _currentTier,
       );
       if (mounted) {
         _navigateToChat();
@@ -148,6 +160,12 @@ class _DownloadScreenState extends State<DownloadScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tierName = _currentTier == ModelTier.lite ? 'Lite' : 'Standard';
+    final modelName = _currentTier == ModelTier.lite
+        ? ModelConfig.liteModelName
+        : ModelConfig.stdModelName;
+    final isLargeDownload = _currentTier == ModelTier.standard && _total > 2000000000;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -157,10 +175,19 @@ class _DownloadScreenState extends State<DownloadScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Spacer(flex: 2),
-              Icon(
-                Icons.auto_awesome,
-                size: 80,
-                color: _hasError ? AppColors.errorText : AppColors.primary,
+              // Mascot
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: _hasError ? AppColors.errorBg : AppColors.mascotBadgeBg,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Icon(
+                  Icons.menu_book_rounded,
+                  size: 40,
+                  color: _hasError ? AppColors.errorText : AppColors.mascotBadgeIcon,
+                ),
               ),
               const SizedBox(height: 24),
               const Text(
@@ -172,7 +199,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              _buildStatusText(),
+              _buildStatusText(tierName, modelName, isLargeDownload),
               const SizedBox(height: 40),
               if (_isDownloading || _progress > 0) ...[
                 ClipRRect(
@@ -216,10 +243,10 @@ class _DownloadScreenState extends State<DownloadScreen> {
     );
   }
 
-  Widget _buildStatusText() {
+  Widget _buildStatusText(String tierName, String modelName, bool isLargeDownload) {
     if (_hasError && _isLoadError) {
       return const Text(
-        'Model downloaded successfully but could not be loaded.\n'
+        'Model downloaded but could not be loaded.\n'
         'Your device may not have enough memory.',
         textAlign: TextAlign.center,
         style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
@@ -233,16 +260,39 @@ class _DownloadScreenState extends State<DownloadScreen> {
       );
     }
     if (_isDownloading) {
-      return const Text(
-        'Wait a little bit, BeSmart is getting ready.\n'
-        'Just make sure you are connected to a good WiFi.',
-        textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+      return Column(
+        children: [
+          const Text(
+            'Please wait, BeSmartAI is getting ready.\n'
+            'Make sure you\'re connected to good WiFi.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+          ),
+          if (isLargeDownload) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.warningBg,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text(
+                'Large download (~3 GB). WiFi strongly recommended.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.warningText,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ],
       );
     }
     return const Text(
-      'Wait a little bit, BeSmart is getting ready.\n'
-      'Just make sure you are connected to a good WiFi.',
+      'Preparing your AI model...\n'
+      'Make sure you\'re connected to good WiFi.',
       textAlign: TextAlign.center,
       style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
     );
@@ -260,7 +310,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
             decoration: BoxDecoration(
               color: AppColors.errorBg,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.errorText.withOpacity(0.3)),
+              border: Border.all(color: AppColors.errorText.withValues(alpha: 0.3)),
             ),
             child: Text(
               display,
@@ -276,7 +326,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
         if (_isLoadError) ...[
           FilledButton.icon(
             onPressed: _isDownloading ? null : _onRetry,
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
             label: const Text('Retry'),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primary,
@@ -287,7 +337,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: _isDownloading ? null : _skipToChat,
-            icon: const Icon(Icons.chat),
+            icon: const Icon(Icons.chat_rounded),
             label: const Text('Continue with Mock AI'),
             style: OutlinedButton.styleFrom(
               side: const BorderSide(color: AppColors.divider),
@@ -298,7 +348,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
         ] else ...[
           FilledButton.icon(
             onPressed: _isDownloading ? null : _onRetry,
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
             label: const Text('Retry'),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primary,

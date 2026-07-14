@@ -1,8 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'model_manager.dart' as mgr;
-
-enum ModelTier { lite, standard }
+import '../config/model_config.dart';
 
 enum ModelStatus { notDownloaded, downloading, ready, error }
 
@@ -37,7 +36,8 @@ class ModelInfo {
     );
   }
 
-  String get label => tier == ModelTier.lite ? 'Lite (400MB)' : 'Standard (900MB)';
+  String get label =>
+      tier == ModelTier.lite ? 'Lite (924 MB)' : 'Standard (3.17 GB)';
 }
 
 class ModelService extends ChangeNotifier {
@@ -48,6 +48,7 @@ class ModelService extends ChangeNotifier {
 
   Stream<double> get progressStream => _progressController.stream;
   ModelInfo get currentModel => _currentModel;
+  ModelTier get currentTier => _currentModel.tier;
 
   ModelService() {
     _subscription = _manager.statusStream.listen(_onManagerStatus);
@@ -58,23 +59,67 @@ class ModelService extends ChangeNotifier {
     switch (info.status) {
       case mgr.ModelStatus.ready:
         status = ModelStatus.ready;
+        break;
       case mgr.ModelStatus.error:
         status = ModelStatus.error;
+        break;
       case mgr.ModelStatus.downloading:
         status = ModelStatus.downloading;
+        break;
       case mgr.ModelStatus.unavailable:
         status = ModelStatus.notDownloaded;
+        break;
     }
 
     _currentModel = _currentModel.copyWith(
+      tier: info.tier,
       status: status,
       progress: info.progress,
       error: info.errorMessage,
+      sizeMB: info.tier == ModelTier.lite ? 924 : 3170,
     );
 
     if (!_progressController.isClosed) {
       _progressController.add(info.progress);
     }
+    notifyListeners();
+  }
+
+  Future<void> setTier(ModelTier tier) async {
+    if (tier == _currentModel.tier && _currentModel.status == ModelStatus.ready) {
+      return;
+    }
+    await _manager.initialize(tier: tier);
+    if (_manager.isReady) {
+      _currentModel = _currentModel.copyWith(tier: tier, status: ModelStatus.ready);
+    } else {
+      _currentModel = _currentModel.copyWith(tier: tier, status: ModelStatus.notDownloaded);
+    }
+    notifyListeners();
+  }
+
+  Future<void> downloadCurrentTier() async {
+    _currentModel = _currentModel.copyWith(status: ModelStatus.downloading, progress: 0.0);
+    notifyListeners();
+    try {
+      await _manager.downloadModel(
+        onProgress: (progress, received, total) {
+          if (!_progressController.isClosed) {
+            _progressController.add(progress);
+          }
+        },
+        tier: _currentModel.tier,
+      );
+    } catch (e) {
+      _currentModel = _currentModel.copyWith(status: ModelStatus.error, error: e.toString());
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> deleteModel() async {
+    await _manager.deleteModel(_currentModel.tier);
+    _currentModel = _currentModel.copyWith(status: ModelStatus.notDownloaded);
     notifyListeners();
   }
 
@@ -92,18 +137,12 @@ class ModelService extends ChangeNotifier {
   }
 
   Future<bool> tryInitializeModel() async {
-    final success = await _manager.reloadModel();
+    final success = await _manager.reloadModel(tier: _currentModel.tier);
     return success;
   }
 
-  Future<void> deleteModel() async {
-    await _manager.deleteModel();
-    _currentModel = _currentModel.copyWith(status: ModelStatus.notDownloaded);
-    notifyListeners();
-  }
-
   bool isModelReady(ModelTier tier) {
-    return _currentModel.status == ModelStatus.ready;
+    return _currentModel.status == ModelStatus.ready && _currentModel.tier == tier;
   }
 
   @override

@@ -7,6 +7,7 @@ ThemeData buildAppTheme() {
     brightness: Brightness.dark,
   ).copyWith(
     error: AppColors.errorText,
+    surface: AppColors.surface,
   );
 
   return ThemeData(
@@ -25,13 +26,16 @@ ThemeData buildAppTheme() {
         fontSize: 18,
         fontWeight: FontWeight.w600,
       ),
+      centerTitle: true,
     ),
     cardTheme: CardThemeData(
       color: AppColors.surface,
       elevation: 0,
+      shadowColor: AppColors.cardShadow,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: AppColors.surface,
@@ -85,6 +89,13 @@ ThemeData buildAppTheme() {
       labelLarge: TextStyle(color: AppColors.textPrimary),
       labelMedium: TextStyle(color: AppColors.textPrimary),
       labelSmall: TextStyle(color: AppColors.textSecondary),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: AppColors.inputFill,
+      border: InputBorder.none,
+      hintStyle: const TextStyle(color: AppColors.textSecondary),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
     ),
   );
 }

@@ -5,6 +5,8 @@ import '../config/model_config.dart';
 import '../services/identity_interceptor.dart';
 import '../services/model_manager.dart';
 import '../services/storage_service.dart';
+import '../services/llm_service.dart';
+import '../utils/debug_logger.dart';
 
 enum ChatState { idle, loading }
 
@@ -14,9 +16,12 @@ String _nextId() => 'msg_${DateTime.now().millisecondsSinceEpoch}_${_messageIdCo
 class ChatProvider extends ChangeNotifier {
   final StorageService _storage = StorageService();
   final ModelManager _modelManager = ModelManager();
+  final DebugLogger _logger = DebugLogger();
 
   List<Message> _messages = [];
   ChatState _state = ChatState.idle;
+  int _promptLogCount = 0;
+  final int _maxPromptLogs = 3;
 
   List<Message> get messages => _messages;
   ChatState get state => _state;
@@ -61,7 +66,7 @@ class ChatProvider extends ChangeNotifier {
         final lang = _storage.getLanguage();
         final msg = lang == 'fr'
             ? "Le modèle n'est pas chargé. Allez dans Paramètres > Télécharger le modèle pour l'installer."
-            :             'Model is not loaded. Go to Settings > Download Model to install it.';
+            : 'Model is not loaded. Go to Settings > Download Model to install it.';
         _state = ChatState.idle;
         notifyListeners();
         await _addResponse(msg);
@@ -104,9 +109,11 @@ class ChatProvider extends ChangeNotifier {
         notifyListeners();
       }
 
+      final fullResponse = buffer.toString();
+      final sanitized = sanitizeGemmaHistory(fullResponse);
       _messages[_messages.length - 1] = Message(
         id: aiMsg.id,
-        content: buffer.toString(),
+        content: sanitized,
         isUser: false,
         timestamp: DateTime.now(),
         isStreaming: false,
@@ -133,9 +140,10 @@ class ChatProvider extends ChangeNotifier {
   }
 
   Future<void> _addResponse(String content) async {
+    final sanitized = sanitizeGemmaHistory(content);
     final msg = Message(
       id: _nextId(),
-      content: content,
+      content: sanitized,
       isUser: false,
       timestamp: DateTime.now(),
       isStreaming: false,
@@ -147,22 +155,21 @@ class ChatProvider extends ChangeNotifier {
 
   String _buildPrompt(String userMessage, List<Message> history) {
     final buffer = StringBuffer();
-    buffer.writeln('<|im_start|>system');
-    buffer.writeln('${ModelConfig.systemPrompt}<|im_end|>');
+    buffer.writeln('<bos>');
+    buffer.writeln('<|turn>system');
+    buffer.writeln('${ModelConfig.systemPrompt}<turn|>');
+    buffer.writeln('<|turn>user');
+    buffer.writeln('$userMessage<turn|>');
+    buffer.writeln('<|turn>model');
 
-    final context = history.length > 1 ? history.sublist(0, history.length - 1) : <Message>[];
-    for (final msg in context.reversed.take(2).toList().reversed) {
-      if (msg.isUser || (!msg.isUser && !msg.isStreaming)) {
-        final role = msg.isUser ? 'user' : 'assistant';
-        buffer.writeln('<|im_start|>$role');
-        buffer.writeln('${msg.content}<|im_end|>');
-      }
+    final prompt = buffer.toString();
+    if (_promptLogCount < _maxPromptLogs) {
+      debugPrint('[ChatProvider] Raw prompt #${_promptLogCount + 1}: $prompt');
+      _logger.logPrompt(prompt);
+      _promptLogCount++;
     }
 
-    buffer.writeln('<|im_start|>user');
-    buffer.writeln('$userMessage<|im_end|>');
-    buffer.writeln('<|im_start|>assistant');
-    return buffer.toString();
+    return prompt;
   }
 
   String _resolveResponse(String key) {
@@ -190,6 +197,121 @@ class ChatProvider extends ChangeNotifier {
   Future<void> clearChat() async {
     _messages.clear();
     await _storage.clearMessages();
+    notifyListeners();
+  }
+
+  /// Regenerates the last AI response
+  Future<void> regenerateLastResponse() async {
+    // Find the last user message
+    int lastUserIndex = -1;
+    for (int i = _messages.length - 1; i >= 0; i--) {
+      if (_messages[i].isUser) {
+        lastUserIndex = i;
+        break;
+      }
+    }
+
+    if (lastUserIndex == -1) return;
+
+    final userMessage = _messages[lastUserIndex];
+    
+    // Remove all messages after the last user message
+    _messages.removeRange(lastUserIndex + 1, _messages.length);
+    
+    // Re-send the message
+    _state = ChatState.loading;
+    notifyListeners();
+
+    try {
+      if (!_modelManager.isReady) {
+        final lang = _storage.getLanguage();
+        final msg = lang == 'fr'
+            ? "Le modèle n'est pas chargé. Allez dans Paramètres > Télécharger le modèle pour l'installer."
+            : 'Model is not loaded. Go to Settings > Download Model to install it.';
+        _state = ChatState.idle;
+        notifyListeners();
+        await _addResponse(msg);
+        return;
+      }
+
+      final prompt = _buildPrompt(userMessage.content, _messages);
+
+      final aiMsg = Message(
+        id: _nextId(),
+        content: '',
+        isUser: false,
+        timestamp: DateTime.now(),
+        isStreaming: true,
+      );
+      _messages.add(aiMsg);
+      _state = ChatState.idle;
+      notifyListeners();
+
+      final buffer = StringBuffer();
+
+      final stream = _modelManager.generateStream(prompt);
+      final timeoutStream = stream.timeout(
+        const Duration(seconds: 120),
+        onTimeout: (sink) {
+          sink.addError(TimeoutException('Inference timed out'));
+          sink.close();
+        },
+      );
+
+      await for (final token in timeoutStream) {
+        buffer.write(token);
+        _messages[_messages.length - 1] = Message(
+          id: aiMsg.id,
+          content: buffer.toString(),
+          isUser: false,
+          timestamp: DateTime.now(),
+          isStreaming: true,
+        );
+        notifyListeners();
+      }
+
+      final fullResponse = buffer.toString();
+      final sanitized = sanitizeGemmaHistory(fullResponse);
+      _messages[_messages.length - 1] = Message(
+        id: aiMsg.id,
+        content: sanitized,
+        isUser: false,
+        timestamp: DateTime.now(),
+        isStreaming: false,
+      );
+      await _storage.addMessage(_messages.last);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[ChatProvider] Regenerate error: $e');
+      _state = ChatState.idle;
+      notifyListeners();
+      final lang = _storage.getLanguage();
+      String errMsg;
+      if (e is TimeoutException) {
+        errMsg = lang == 'fr'
+            ? "Cela prend plus de temps que prévu. Essayez une question plus courte."
+            : 'This is taking longer than expected. Try a shorter question.';
+      } else {
+        errMsg = lang == 'fr'
+            ? "Désolé, quelque chose s'est mal passé. Veuillez réessayer."
+            : 'Sorry, something went wrong. Please try again.';
+      }
+      await _addResponse(errMsg);
+    }
+  }
+
+  /// Sends feedback (thumbs up/down) for a message
+  void sendFeedback(int messageIndex, {required bool isPositive}) {
+    // In a real app, this would send to analytics/backend
+    debugPrint('[ChatProvider] Feedback for message $messageIndex: ${isPositive ? 'positive' : 'negative'}');
+    // Could persist feedback locally or send to analytics
+  }
+
+  /// Cancels the current generation
+  void cancelGeneration() {
+    // The ModelManager's stream will be cancelled when we stop listening
+    // For now, just set state to idle
+    _state = ChatState.idle;
     notifyListeners();
   }
 }

@@ -12,7 +12,7 @@ class DeviceInfo {
   });
 
   String get recommendedModelTier {
-    if (ramMB < 4096 || freeStorageMB < 1500) return 'lite';
+    if (ramMB < 4096 || freeStorageMB < 5000) return 'lite';
     return 'standard';
   }
 
