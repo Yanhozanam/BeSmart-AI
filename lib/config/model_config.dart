@@ -12,12 +12,12 @@ class ModelConfig {
   static const int liteContextSize = 256;
   static const int liteMaxTokens = 150;
 
-  // STANDARD TIER - Gemma 4 E2B QAT UD-Q4_K_XL
-  static const String stdModelName = 'BeSmartAI Gemma 4 E2B';
+  // STANDARD TIER - Gemma 2 2B IT Q4_K_M
+  static const String stdModelName = 'BeSmartAI Gemma 2 2B';
   static const String stdDownloadUrl =
-      'https://huggingface.co/unsloth/gemma-4-E2B-it-qat-GGUF/resolve/main/gemma-4-E2B-it-UD-Q4_K_XL.gguf';
-  static const String stdFileName = 'gemma-4-E2B-it-UD-Q4_K_XL.gguf';
-  static const int stdExpectedSizeBytes = 3408000000;
+      'https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf';
+  static const String stdFileName = 'gemma-2-2b-it-Q4_K_M.gguf';
+  static const int stdExpectedSizeBytes = 1600000000;
   static const int stdContextSize = 4096;
   static const int stdMaxTokens = 512;
 
