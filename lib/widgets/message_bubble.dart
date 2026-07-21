@@ -7,12 +7,18 @@ class MessageBubble extends StatelessWidget {
   final Message message;
   final VoidCallback? onRegenerate;
   final ValueChanged<bool>? onFeedback;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  final int index;
 
   const MessageBubble({
     super.key,
     required this.message,
     this.onRegenerate,
     this.onFeedback,
+    this.onEdit,
+    this.onDelete,
+    this.index = 0,
   });
 
   @override
@@ -20,45 +26,141 @@ class MessageBubble extends StatelessWidget {
     final isUser = message.isUser;
 
     if (isUser) {
-      return _buildUserMessage();
+      return _buildUserMessage(context);
     }
     return _buildAiMessage(context);
   }
 
-  Widget _buildUserMessage() {
-    return Padding(
-      padding: const EdgeInsets.only(left: 56.0, right: 16.0, top: 8.0, bottom: 8.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  message.content,
-                  style: const TextStyle(
-                    color: AppColors.userText,
-                    fontSize: 13.0,
-                    height: 1.4,
+  Widget _buildUserMessage(BuildContext context) {
+    return GestureDetector(
+      onLongPress: () {
+        showModalBottomSheet(
+          context: context,
+          backgroundColor: AppColors.surface,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          builder: (ctx) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      _buildUserAvatar(),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Message',
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _formatTime(message.timestamp),
-                  style: const TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 11.0,
+                  const SizedBox(height: 16),
+                  Text(
+                    message.content,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
                   ),
-                  textAlign: TextAlign.right,
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  const Divider(color: AppColors.divider, height: 1),
+                  const SizedBox(height: 8),
+                  if (onEdit != null)
+                    ListTile(
+                      leading: const Icon(Icons.edit_rounded, color: AppColors.primary, size: 20),
+                      title: const Text(
+                        'Edit',
+                        style: TextStyle(color: AppColors.textPrimary, fontSize: 15),
+                      ),
+                      dense: true,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        onEdit?.call();
+                      },
+                    ),
+                  if (onDelete != null)
+                    ListTile(
+                      leading: const Icon(Icons.delete_outline_rounded, color: AppColors.errorText, size: 20),
+                      title: const Text(
+                        'Delete',
+                        style: TextStyle(color: AppColors.errorText, fontSize: 15),
+                      ),
+                      dense: true,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        showDialog(
+                          context: context,
+                          builder: (dCtx) => AlertDialog(
+                            backgroundColor: AppColors.surface,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            title: const Text('Delete message?', style: TextStyle(color: AppColors.textPrimary)),
+                            content: const Text('This cannot be undone.', style: TextStyle(color: AppColors.textSecondary)),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(dCtx),
+                                child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.pop(dCtx);
+                                  onDelete?.call();
+                                },
+                                child: const Text('Delete', style: TextStyle(color: AppColors.errorText)),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(width: 8),
-          _buildUserAvatar(),
-        ],
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.only(left: 56.0, right: 16.0, top: 8.0, bottom: 8.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    message.content,
+                    style: const TextStyle(
+                      color: AppColors.userText,
+                      fontSize: 13.0,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatTime(message.timestamp),
+                    style: const TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 11.0,
+                    ),
+                    textAlign: TextAlign.right,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            _buildUserAvatar(),
+          ],
+        ),
       ),
     );
   }

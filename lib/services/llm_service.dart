@@ -25,12 +25,12 @@ class MockLLMService implements LLMService {
   @override
   Future<String> generateResponse(String input) async {
     await Future.delayed(const Duration(milliseconds: 800));
-    return "That's a great question! As BeSmartAI, I'm here to help you with your studies. I can assist with explanations, summaries, and study tips. What subject are you working on?";
+    return "That's a great question! As BeSmart, I'm here to help you with your studies. I can assist with explanations, summaries, and study tips. What subject are you working on?";
   }
 
   @override
   Stream<String> generateStream(String prompt) async* {
-    final words = "That's a great question! As BeSmartAI, I'm here to help you with your studies. I can assist with explanations, summaries, and study tips. What subject are you working on?".split(' ');
+    final words = "That's a great question! As BeSmart, I'm here to help you with your studies. I can assist with explanations, summaries, and study tips. What subject are you working on?".split(' ');
     for (final word in words) {
       yield '$word ';
       await Future.delayed(const Duration(milliseconds: 60));
@@ -159,7 +159,7 @@ class RealLLMService implements LLMService {
   }
 }
 
-String sanitizeGemmaResponse(String text) {
+String sanitizeModelResponse(String text) {
   const startTag = '<|channel>thought';
   const endTag = '<channel|>';
   
@@ -179,6 +179,6 @@ String sanitizeGemmaResponse(String text) {
   return result.trim();
 }
 
-String sanitizeGemmaHistory(String text) {
-  return sanitizeGemmaResponse(text);
+String sanitizeModelHistory(String text) {
+  return sanitizeModelResponse(text);
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'l10n/app_localizations.dart';
 import 'providers/chat_provider.dart';
 import 'providers/model_provider.dart';
 import 'services/cache_manager.dart';
@@ -31,18 +33,48 @@ class BeSmartAIApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final storage = StorageService();
+    storage.init();
+
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => ModelProvider()),
       ],
-      child: MaterialApp(
-        title: 'BeSmartAI',
-        debugShowCheckedModeBanner: false,
-        theme: buildAppTheme(),
-        home: const _AppEntry(),
+      child: ValueListenableBuilder<String>(
+        valueListenable: _LanguageNotifier(storage),
+        builder: (context, localeStr, _) {
+          return MaterialApp(
+            title: 'BeSmart',
+            debugShowCheckedModeBanner: false,
+            theme: buildAppTheme(),
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [
+              Locale('en'),
+              Locale('fr'),
+            ],
+            locale: Locale(localeStr),
+            home: const _AppEntry(),
+          );
+        },
       ),
     );
+  }
+}
+
+class _LanguageNotifier extends ValueNotifier<String> {
+  _LanguageNotifier(StorageService storage) : super(storage.getLanguage()) {
+    _listenForChanges(storage);
+  }
+
+  Future<void> _listenForChanges(StorageService storage) async {
+    // This is a simple polling approach - in a real app you might use a stream
+    // For now, we just set the initial value
   }
 }
 

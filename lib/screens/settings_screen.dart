@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../config/model_config.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/chat_provider.dart';
 import '../providers/model_provider.dart';
 import '../services/model_service.dart';
@@ -9,6 +10,7 @@ import '../services/device_info.dart';
 import '../services/model_manager.dart' hide ModelStatus;
 import '../services/storage_service.dart';
 import '../theme/app_colors.dart';
+import 'download_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -140,7 +142,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 32),
               const Center(
                 child: Text(
-                  'BeSmartAI v1.0.0',
+                  'BeSmart v1.0.0',
                   style: TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 13,
@@ -309,9 +311,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   String _getTierDescription(ModelTier tier) {
     if (tier == ModelTier.lite) {
-      return 'Qwen 2.5 1.5B — Fast, lightweight';
+      return 'BeSmart Lite — Fast, lightweight';
     } else {
-      return 'Gemma 4 E2B QAT — Smarter, better reasoning';
+      return 'BeSmart Standard — Smarter, better reasoning';
     }
   }
 
@@ -492,6 +494,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (mounted) {
       context.read<ModelProvider>().switchTier(tier);
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const DownloadScreen()),
+      );
     }
   }
 

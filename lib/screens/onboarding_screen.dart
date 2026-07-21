@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../config/model_config.dart';
-import '../providers/model_provider.dart';
 import '../services/device_info.dart';
 import '../services/model_manager.dart';
 import '../services/storage_service.dart';
@@ -17,16 +16,22 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   bool _checking = true;
-  int _ramMB = 0;
-  int _freeStorageMB = 0;
   ModelTier _recommendedTier = ModelTier.standard;
   bool _canRunStandard = true;
   ModelTier _selectedTier = ModelTier.standard;
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
 
   @override
   void initState() {
     super.initState();
     _performCheck();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   Future<void> _performCheck() async {
@@ -35,8 +40,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final recommended = canRunStandard ? ModelTier.standard : ModelTier.lite;
 
     setState(() {
-      _ramMB = info.ramMB;
-      _freeStorageMB = info.freeStorageMB;
       _recommendedTier = recommended;
       _selectedTier = recommended;
       _canRunStandard = canRunStandard;
@@ -61,59 +64,93 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Spacer(flex: 2),
-              // Mascot + Title
-              Column(
-                children: [
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: AppColors.mascotBadgeBg,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Icon(
-                      Icons.menu_book_rounded,
-                      size: 40,
-                      color: AppColors.mascotBadgeIcon,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'BeSmartAI',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Your offline study companion',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
+              // Carousel
+              Expanded(
+                child: PageView(
+                  controller: _pageController,
+                  onPageChanged: (page) => setState(() => _currentPage = page),
+                  children: [
+                    _buildWhyOfflinePage(),
+                    _buildHowItWorksPage(),
+                    _buildChooseModelPage(),
+                  ],
+                ),
               ),
               const Spacer(flex: 1),
-              // Tier selection cards
-              _buildTierCards(),
-              const Spacer(flex: 2),
-              FilledButton(
-                onPressed: _onContinue,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.background,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              // Page dots
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(3, (index) {
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: _currentPage == index ? 24 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: _currentPage == index
+                          ? AppColors.primary
+                          : AppColors.divider,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: 24),
+              // Bottom buttons
+              if (_currentPage < 2)
+                FilledButton(
+                  onPressed: () => _pageController.nextPage(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.background,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Next'),
+                )
+              else ...[
+                // Download size warning
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.warningBg,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.warningText.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.wifi_rounded, size: 18, color: AppColors.warningText),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _selectedTier == ModelTier.lite
+                              ? '~925 MB download. WiFi recommended.'
+                              : '~3.2 GB download. WiFi strongly recommended.',
+                          style: const TextStyle(fontSize: 13, color: AppColors.warningText),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                child: const Text('Continue'),
-              ),
+                const SizedBox(height: 12),
+                FilledButton(
+                  onPressed: _onContinue,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.background,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Continue'),
+                ),
+              ],
               const SizedBox(height: 16),
             ],
           ),
@@ -122,18 +159,125 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  Widget _buildTierCards() {
+  Widget _buildWhyOfflinePage() {
     return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
+        Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            color: AppColors.mascotBadgeBg,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: const Icon(
+            Icons.flight_takeoff_rounded,
+            size: 40,
+            color: AppColors.mascotBadgeIcon,
+          ),
+        ),
+        const SizedBox(height: 24),
         const Text(
-          'Choose Your Model',
+          'Works Offline',
+          textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: 18,
+            fontSize: 22,
             fontWeight: FontWeight.bold,
             color: AppColors.textPrimary,
           ),
         ),
         const SizedBox(height: 12),
+        const Text(
+          'No internet? No problem.\nBeSmart runs entirely on your phone.\nNo data charges, no tracking.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 15,
+            color: AppColors.textSecondary,
+            height: 1.5,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHowItWorksPage() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            color: AppColors.mascotBadgeBg,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: const Icon(
+            Icons.security_rounded,
+            size: 40,
+            color: AppColors.mascotBadgeIcon,
+          ),
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'Your Data Stays Private',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'All AI processing happens on-device.\nNothing leaves your phone.\nNo account needed — just download and go.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 15,
+            color: AppColors.textSecondary,
+            height: 1.5,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChooseModelPage() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            color: AppColors.mascotBadgeBg,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: const Icon(
+            Icons.psychology_rounded,
+            size: 40,
+            color: AppColors.mascotBadgeIcon,
+          ),
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'Choose Your Model',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Pick the size that fits your phone',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 14,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 20),
         _tierCard(ModelTier.lite),
         const SizedBox(height: 12),
         _tierCard(ModelTier.standard),
@@ -143,10 +287,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             padding: EdgeInsets.only(top: 8),
             child: Text(
               'Standard tier requires 4 GB+ RAM and 5 GB+ storage.',
-              style: TextStyle(
-                color: AppColors.warningText,
-                fontSize: 13,
-              ),
+              style: TextStyle(color: AppColors.warningText, fontSize: 13),
               textAlign: TextAlign.center,
             ),
           ),
@@ -299,7 +440,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         name: 'Lite',
         modelName: ModelConfig.liteModelName,
         size: '924 MB',
-        description: 'Qwen 2.5 1.5B — Fast, lightweight',
+        description: 'BeSmart Lite — Fast, lightweight',
         ramRequired: '3 GB+ RAM',
         storageRequired: '1.5 GB+ storage',
         icon: Icons.speed_rounded,
@@ -309,7 +450,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         name: 'Standard',
         modelName: ModelConfig.stdModelName,
         size: '3.17 GB',
-        description: 'Gemma 4 E2B QAT — Smarter, better reasoning',
+        description: 'BeSmart Standard — Smarter, better reasoning',
         ramRequired: '4 GB+ RAM',
         storageRequired: '5 GB+ storage',
         icon: Icons.psychology_rounded,

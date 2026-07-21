@@ -25,12 +25,9 @@ class IdentityInterceptor {
     _IdentityRule(
       patterns: [
         'are you chatgpt',
-        'are you gemini',
-        'are you openai',
-        'are you gpt',
-        'are you claude',
-        'are you llama',
-        'are you copilot',
+        'are you an ai',
+        'are you a bot',
+        'what kind of ai',
       ],
       response: 'notChatGPT',
     ),

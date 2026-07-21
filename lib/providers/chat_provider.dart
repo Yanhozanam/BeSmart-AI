@@ -5,9 +5,8 @@ import '../config/model_config.dart';
 import '../services/identity_interceptor.dart';
 import '../services/model_manager.dart';
 import '../services/storage_service.dart';
-import '../services/llm_service.dart';
+import '../services/llm_service.dart' show sanitizeModelHistory;
 import '../utils/debug_logger.dart';
-import '../services/model_service.dart';
 
 enum ChatState { idle, loading }
 
@@ -102,7 +101,7 @@ class ChatProvider extends ChangeNotifier {
   }
 
   Future<void> _addResponse(String content) async {
-    final sanitized = sanitizeGemmaHistory(content);
+    final sanitized = sanitizeModelHistory(content);
     final msg = Message(
       id: _nextId(),
       content: sanitized,
@@ -149,8 +148,8 @@ class ChatProvider extends ChangeNotifier {
       case 'pocketIdentity':
         final lang = _storage.getLanguage();
         return lang == 'fr'
-            ? "Je suis BeSmartAI, votre compagnon d'étude hors ligne conçu pour les étudiants."
-            : "I'm BeSmartAI, your offline study companion built for students.";
+            ? "Je suis BeSmart, votre compagnon d'étude hors ligne conçu pour les étudiants."
+            : "I'm BeSmart, your offline study companion built for students.";
       case 'biuIdentity':
         final lang = _storage.getLanguage();
         return lang == 'fr'
@@ -159,8 +158,8 @@ class ChatProvider extends ChangeNotifier {
       case 'notChatGPT':
         final lang = _storage.getLanguage();
         return lang == 'fr'
-            ? 'Non, je suis BeSmartAI — un assistant hors ligne conçu pour les étudiants.'
-            : "No, I'm BeSmartAI — an offline assistant designed for students.";
+            ? 'Non, je suis BeSmart — un assistant hors ligne conçu pour les étudiants.'
+            : "No, I'm BeSmart — an offline assistant designed for students.";
       default:
         return key;
     }
@@ -169,6 +168,57 @@ class ChatProvider extends ChangeNotifier {
   Future<void> clearChat() async {
     _messages.clear();
     await _storage.clearMessages();
+    notifyListeners();
+  }
+
+  /// Edits a user message at the given index
+  Future<void> editMessage(int index, String newContent) async {
+    if (index < 0 || index >= _messages.length) return;
+    if (!_messages[index].isUser) return;
+
+    _messages.removeRange(index, _messages.length);
+
+    final edited = Message(
+      id: _nextId(),
+      content: newContent.trim(),
+      isUser: true,
+      timestamp: DateTime.now(),
+    );
+    _messages.add(edited);
+    await _storage.addMessage(edited);
+    notifyListeners();
+
+    _state = ChatState.loading;
+    notifyListeners();
+
+    try {
+      if (!_modelManager.isReady) {
+        final lang = _storage.getLanguage();
+        final msg = lang == 'fr'
+            ? "Le modèle n'est pas chargé. Allez dans Paramètres > Télécharger le modèle pour l'installer."
+            : 'Model is not loaded. Go to Settings > Download Model to install it.';
+        _state = ChatState.idle;
+        notifyListeners();
+        await _addResponse(msg);
+        return;
+      }
+
+      final prompt = _buildPrompt(newContent.trim(), _messages);
+      await _streamResponse(prompt);
+    } catch (e) {
+      debugPrint('[ChatProvider] Edit error: $e');
+      _state = ChatState.idle;
+      notifyListeners();
+      await _addResponse('Sorry, something went wrong. Please try again.');
+    }
+  }
+
+  /// Deletes a message at the given index
+  Future<void> deleteMessage(int index) async {
+    if (index < 0 || index >= _messages.length) return;
+    final msg = _messages[index];
+    await _storage.deleteMessage(msg.id);
+    _messages.removeAt(index);
     notifyListeners();
   }
 
@@ -245,7 +295,6 @@ class ChatProvider extends ChangeNotifier {
       isStreaming: true,
     );
     _messages.add(aiMsg);
-    _state = ChatState.idle;
     notifyListeners();
 
     final buffer = StringBuffer();
@@ -284,7 +333,7 @@ class ChatProvider extends ChangeNotifier {
     _generationSubscription = null;
 
     final fullResponse = buffer.toString();
-    final sanitized = sanitizeGemmaHistory(fullResponse);
+    final sanitized = sanitizeModelHistory(fullResponse);
     _messages[_messages.length - 1] = Message(
       id: aiMsg.id,
       content: sanitized,
@@ -293,6 +342,7 @@ class ChatProvider extends ChangeNotifier {
       isStreaming: false,
     );
     await _storage.addMessage(_messages.last);
+    _state = ChatState.idle;
     notifyListeners();
   }
 

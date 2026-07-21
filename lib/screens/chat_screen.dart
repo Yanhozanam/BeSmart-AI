@@ -24,6 +24,7 @@ class _ChatScreenState extends State<ChatScreen> {
   late ChatProvider _provider;
   bool _showAttachSheet = false;
   OverlayEntry? _attachSheetEntry;
+  bool _userScrolledUp = false;
 
   @override
   void initState() {
@@ -31,12 +32,14 @@ class _ChatScreenState extends State<ChatScreen> {
     _provider = context.read<ChatProvider>();
     _provider.addListener(_onProviderChange);
     _controller.addListener(_onTextChanged);
+    _scrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
     _provider.removeListener(_onProviderChange);
     _controller.removeListener(_onTextChanged);
+    _scrollController.removeListener(_onScroll);
     _controller.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
@@ -44,8 +47,15 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.position.pixels;
+    _userScrolledUp = (maxScroll - currentScroll) > 100;
+  }
+
   void _onProviderChange() {
-    if (_provider.messages.isNotEmpty) {
+    if (_provider.messages.isNotEmpty && !_userScrolledUp) {
       _scrollToBottom();
     }
   }
@@ -76,6 +86,31 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _onNewChat() {
     _provider.clearChat();
+  }
+
+  void _confirmClearChat() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Clear Chat', style: TextStyle(color: AppColors.textPrimary)),
+        content: const Text('Delete all messages? This cannot be undone.', style: TextStyle(color: AppColors.textSecondary)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () {
+              _provider.clearChat();
+              Navigator.pop(ctx);
+            },
+            child: const Text('Clear', style: TextStyle(color: AppColors.errorText)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _onSuggestionTap(String prompt) {
@@ -225,7 +260,7 @@ class _ChatScreenState extends State<ChatScreen> {
           },
         ),
         title: const Text(
-          'Study with Beso',
+          'Study with BeSmart',
           style: TextStyle(
             color: AppColors.textPrimary,
             fontSize: 18,
@@ -237,8 +272,63 @@ class _ChatScreenState extends State<ChatScreen> {
           IconButton(
             icon: const Icon(Icons.more_vert_rounded),
             onPressed: () {
-              // Overflow menu - could show new chat, settings, etc.
-              _onNewChat();
+              showModalBottomSheet(
+                context: context,
+                backgroundColor: AppColors.surface,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                builder: (ctx) => SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Menu',
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ListTile(
+                          leading: const Icon(Icons.add_rounded, color: AppColors.primary, size: 20),
+                          title: const Text('New Chat', style: TextStyle(color: AppColors.textPrimary, fontSize: 15)),
+                          dense: true,
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _onNewChat();
+                          },
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.settings_rounded, color: AppColors.textSecondary, size: 20),
+                          title: const Text('Settings', style: TextStyle(color: AppColors.textPrimary, fontSize: 15)),
+                          dense: true,
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                            );
+                          },
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.delete_outline_rounded, color: AppColors.errorText, size: 20),
+                          title: const Text('Clear Chat', style: TextStyle(color: AppColors.errorText, fontSize: 15)),
+                          dense: true,
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _confirmClearChat();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
             },
           ),
         ],
@@ -247,43 +337,59 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           Consumer<ModelProvider>(
             builder: (context, modelProvider, _) {
-              if (modelProvider.currentModel.status == ModelStatus.error ||
-                  modelProvider.currentModel.status == ModelStatus.notDownloaded) {
-                final isError = modelProvider.currentModel.status == ModelStatus.error;
-                return GestureDetector(
-                  onTap: () => _showModelOptions(context, isError),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    color: isError ? AppColors.errorBg : AppColors.warningBg,
-                    child: Row(
-                      children: [
-                        Icon(
-                          isError ? Icons.error_outline : Icons.cloud_download_rounded,
-                          color: isError ? AppColors.errorText : AppColors.warningText,
-                          size: 18,
+              if (modelProvider.currentModel.status == ModelStatus.error) {
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  color: AppColors.errorBg,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: AppColors.errorText, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Model error — tap to fix',
+                          style: const TextStyle(color: AppColors.errorText, fontSize: 13),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            isError
-                                ? 'Model error — tap to fix'
-                                : 'Model not downloaded — tap to download',
-                            style: TextStyle(
-                              color: isError
-                                  ? AppColors.errorText
-                                  : AppColors.warningText,
-                              fontSize: 13,
-                            ),
-                          ),
+                      ),
+                      TextButton(
+                        onPressed: () => _showModelOptions(context, true),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          color: AppColors.textSecondary,
-                          size: 18,
+                        child: const Text('Fix', style: TextStyle(color: AppColors.errorText, fontWeight: FontWeight.bold, fontSize: 13)),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              if (modelProvider.currentModel.status == ModelStatus.notDownloaded) {
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  color: AppColors.warningBg,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.cloud_download_rounded, color: AppColors.warningText, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Model not downloaded — need AI?',
+                          style: const TextStyle(color: AppColors.warningText, fontSize: 13),
                         ),
-                      ],
-                    ),
+                      ),
+                      TextButton(
+                        onPressed: () => _showModelOptions(context, false),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: const Text('Download', style: TextStyle(color: AppColors.warningText, fontWeight: FontWeight.bold, fontSize: 13)),
+                      ),
+                    ],
                   ),
                 );
               }
@@ -336,22 +442,39 @@ class _ChatScreenState extends State<ChatScreen> {
           Expanded(
             child: Consumer<ChatProvider>(
               builder: (context, provider, _) {
-                final messages = provider.messages;
-                if (messages.isEmpty) {
-                  return _buildLandingScreen();
-                }
-                return Stack(
-                  children: [
-                    ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.only(top: 8, bottom: 8),
-                      itemCount: messages.length + (provider.state == ChatState.loading ? 1 : 0),
+                  final messages = provider.messages;
+                  final isLoading = provider.state == ChatState.loading;
+                  final hasStreamingMessage = messages.isNotEmpty && messages.last.isStreaming;
+                  if (messages.isEmpty) {
+                    return _buildLandingScreen();
+                  }
+                  return Stack(
+                    children: [
+                      ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.only(top: 8, bottom: 8),
+                        itemCount: messages.length + (isLoading && !hasStreamingMessage ? 1 : 0),
                       itemBuilder: (context, index) {
                         if (index < messages.length) {
+                          final msg = messages[index];
                           return MessageBubble(
-                            message: messages[index],
+                            message: msg,
+                            index: index,
                             onRegenerate: () => _provider.regenerateLastResponse(),
                             onFeedback: (isPositive) => _provider.sendFeedback(index, isPositive: isPositive),
+                            onEdit: msg.isUser
+                                ? () {
+                                    _controller.text = msg.content;
+                                    _controller.selection = TextSelection.fromPosition(
+                                      TextPosition(offset: msg.content.length),
+                                    );
+                                    _focusNode.requestFocus();
+                                    _provider.deleteMessage(index);
+                                  }
+                                : null,
+                            onDelete: msg.isUser
+                                ? () => _provider.deleteMessage(index)
+                                : null,
                           );
                         }
                         return const TypingIndicator();
@@ -568,7 +691,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       maxLines: null,
                       minLines: 1,
                       decoration: InputDecoration(
-                        hintText: isLoading ? 'Beso is thinking...' : 'Ask anything...',
+                        hintText: isLoading ? 'BeSmart is thinking...' : 'Ask anything...',
                         hintStyle: const TextStyle(color: AppColors.textSecondary),
                         border: InputBorder.none,
                         contentPadding: const EdgeInsets.symmetric(

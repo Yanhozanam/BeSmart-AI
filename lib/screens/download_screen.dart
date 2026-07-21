@@ -2,11 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../config/model_config.dart';
-import '../providers/model_provider.dart';
 import '../services/model_manager.dart'
     show ModelManager, ModelStatus, ModelInfo;
-import '../services/model_service.dart'
-    show ModelTier;
 import '../theme/app_colors.dart';
 import 'chat_screen.dart';
 
@@ -27,6 +24,10 @@ class _DownloadScreenState extends State<DownloadScreen> {
   bool _isLoadError = false;
   StreamSubscription<ModelInfo>? _subscription;
   ModelTier _currentTier = ModelTier.standard;
+  int _speedBytesPerSec = 0;
+  int _etaSeconds = 0;
+  DateTime? _lastSpeedCheck;
+  int _lastSpeedBytes = 0;
 
   @override
   void initState() {
@@ -72,9 +73,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
       return;
     }
 
-    final modelPath = await ModelConfig.modelPathForTier(_currentTier);
     final partialPath = await ModelConfig.partialModelPathForTier(_currentTier);
-    final modelFile = File(modelPath);
     final partialFile = File(partialPath);
 
     if (await partialFile.exists()) {
@@ -101,9 +100,28 @@ class _DownloadScreenState extends State<DownloadScreen> {
         onProgress: (progress, received, total) {
           if (mounted) {
             setState(() {
+              final now = DateTime.now();
+              if (_lastSpeedCheck != null) {
+                final elapsed = now.difference(_lastSpeedCheck!).inMilliseconds;
+                if (elapsed >= 1000) {
+                  final bytesSinceLast = received - _lastSpeedBytes;
+                  _speedBytesPerSec = (bytesSinceLast / (elapsed / 1000)).round();
+                  _lastSpeedCheck = now;
+                  _lastSpeedBytes = received;
+                }
+              } else {
+                _lastSpeedCheck = now;
+                _lastSpeedBytes = received;
+              }
+
               _progress = progress;
               _received = received;
               _total = total;
+
+              final remaining = total - received;
+              _etaSeconds = _speedBytesPerSec > 0
+                  ? (remaining / _speedBytesPerSec).round()
+                  : 0;
             });
           }
         },
@@ -128,6 +146,15 @@ class _DownloadScreenState extends State<DownloadScreen> {
     _startDownload();
   }
 
+  void _onCancel() {
+    ModelManager().cancelDownload();
+    setState(() {
+      _isDownloading = false;
+      _hasError = true;
+      _errorMessage = 'Download cancelled by user.';
+    });
+  }
+
   void _navigateToChat() {
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
@@ -145,6 +172,28 @@ class _DownloadScreenState extends State<DownloadScreen> {
   String _formatMB(int bytes) {
     final mb = bytes / (1024 * 1024);
     return '${mb.toStringAsFixed(0)} MB';
+  }
+
+  String _formatSpeed(int bytesPerSec) {
+    if (bytesPerSec >= 1048576) {
+      return '${(bytesPerSec / 1048576).toStringAsFixed(1)} MB/s';
+    } else if (bytesPerSec >= 1024) {
+      return '${(bytesPerSec / 1024).toStringAsFixed(0)} KB/s';
+    }
+    return '$bytesPerSec B/s';
+  }
+
+  String _formatDuration(int seconds) {
+    if (seconds >= 3600) {
+      final h = seconds ~/ 3600;
+      final m = (seconds % 3600) ~/ 60;
+      return '${h}h ${m}m';
+    } else if (seconds >= 60) {
+      final m = seconds ~/ 60;
+      final s = seconds % 60;
+      return '${m}m ${s}s';
+    }
+    return '${seconds}s';
   }
 
   String _formatError(String msg) {
@@ -166,77 +215,131 @@ class _DownloadScreenState extends State<DownloadScreen> {
         : ModelConfig.stdModelName;
     final isLargeDownload = _currentTier == ModelTier.standard && _total > 2000000000;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Spacer(flex: 2),
-              // Mascot
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: _hasError ? AppColors.errorBg : AppColors.mascotBadgeBg,
-                  borderRadius: BorderRadius.circular(20),
+    return PopScope(
+      canPop: !_isDownloading,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _isDownloading) {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: AppColors.surface,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Text('Cancel download?', style: TextStyle(color: AppColors.textPrimary)),
+              content: const Text('The download will be cancelled and you can retry later.', style: TextStyle(color: AppColors.textSecondary)),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Keep downloading', style: TextStyle(color: AppColors.primary)),
                 ),
-                child: Icon(
-                  Icons.menu_book_rounded,
-                  size: 40,
-                  color: _hasError ? AppColors.errorText : AppColors.mascotBadgeIcon,
+                TextButton(
+                  onPressed: () {
+                    ModelManager().cancelDownload();
+                    Navigator.pop(ctx);
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Cancel', style: TextStyle(color: AppColors.errorText)),
                 ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Setting up BeSmartAI',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+              ],
+            ),
+          );
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Spacer(flex: 2),
+                // Mascot
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: _hasError ? AppColors.errorBg : AppColors.mascotBadgeBg,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Icon(
+                    Icons.menu_book_rounded,
+                    size: 40,
+                    color: _hasError ? AppColors.errorText : AppColors.mascotBadgeIcon,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              _buildStatusText(tierName, modelName, isLargeDownload),
-              const SizedBox(height: 40),
-              if (_isDownloading || _progress > 0) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: LinearProgressIndicator(
-                    value: _isLoadError ? 1.0 : _progress,
-                    minHeight: 12,
-                    backgroundColor: AppColors.progressTrack,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      _isLoadError ? AppColors.errorText : AppColors.primary,
-                    ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Setting up BeSmart',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  '${_formatMB(_received)} / ${_formatMB(_total)}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: AppColors.textSecondary,
+                _buildStatusText(tierName, modelName, isLargeDownload),
+                const SizedBox(height: 40),
+                if (_isDownloading || _progress > 0) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: _isLoadError ? 1.0 : _progress,
+                      minHeight: 12,
+                      backgroundColor: AppColors.progressTrack,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        _isLoadError ? AppColors.errorText : AppColors.primary,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${(_progress * 100).toStringAsFixed(1)}%',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: _isLoadError ? AppColors.errorText : AppColors.primary,
+                  const SizedBox(height: 12),
+                  Text(
+                    '${_formatMB(_received)} / ${_formatMB(_total)}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${(_progress * 100).toStringAsFixed(1)}%',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: _isLoadError ? AppColors.errorText : AppColors.primary,
+                    ),
+                  ),
+                  if (_isDownloading && _speedBytesPerSec > 0) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      _formatSpeed(_speedBytesPerSec) +
+                          (_etaSeconds > 0 ? ' • ${_formatDuration(_etaSeconds)} left' : ''),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                  if (_isDownloading) ...[
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      onPressed: _onCancel,
+                      icon: const Icon(Icons.stop_rounded, size: 18),
+                      label: const Text('Cancel'),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: AppColors.errorText.withValues(alpha: 0.5)),
+                        foregroundColor: AppColors.errorText,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                      ),
+                    ),
+                  ],
+                ],
+                if (_hasError) ...[
+                  const SizedBox(height: 24),
+                  _buildErrorMessage(),
+                ],
+                const Spacer(flex: 3),
               ],
-              if (_hasError) ...[
-                const SizedBox(height: 24),
-                _buildErrorMessage(),
-              ],
-              const Spacer(flex: 3),
-            ],
+            ),
           ),
         ),
       ),
@@ -263,7 +366,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
       return Column(
         children: [
           const Text(
-            'Please wait, BeSmartAI is getting ready.\n'
+            'Please wait, BeSmart is getting ready.\n'
             'Make sure you\'re connected to good WiFi.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 14, color: AppColors.textSecondary),

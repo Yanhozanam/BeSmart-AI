@@ -9,6 +9,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.2
   provider: ^6.1.2
   hive: ^2.2.3
   hive_flutter: ^1.1.0
@@ -28,3 +31,10 @@ dependency_overrides:
 
 flutter:
   uses-material-design: true
+  generate: true
+
+flutter_intl:
+  enabled: true
+  class_name: AppLocalizations
+  arb_dir: lib/l10n
+  output_dir: lib/l10n
